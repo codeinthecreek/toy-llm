@@ -1,4 +1,7 @@
+import math
+
 import torch
+import torch.nn as nn
 
 from model.config import GPTConfig
 from model.gpt import GPT
@@ -18,6 +21,30 @@ def test_forward_output_shape():
 
     assert logits.shape == (batch_size, seq_len, config.vocab_size)
     assert intermediates is None
+
+
+def test_lm_head_tied_to_token_embedding():
+    _, model = make_model()
+    assert model.lm_head.weight is model.token_emb.weight
+
+
+def test_gpt2_style_initialization():
+    torch.manual_seed(0)
+    config = GPTConfig(vocab_size=50, block_size=16, n_layer=4, n_head=4, n_embd=64)
+    model = GPT(config)
+
+    expected_std = 0.02
+    expected_scaled_std = 0.02 / math.sqrt(2 * config.n_layer)
+
+    for name, module in model.named_modules():
+        if isinstance(module, nn.Linear):
+            is_residual_output = name.endswith("attn.out_proj") or name.endswith("mlp.fc_out")
+            target_std = expected_scaled_std if is_residual_output else expected_std
+            assert math.isclose(module.weight.std().item(), target_std, rel_tol=0.3)
+            if module.bias is not None:
+                assert torch.all(module.bias == 0)
+        elif isinstance(module, nn.Embedding):
+            assert math.isclose(module.weight.std().item(), expected_std, rel_tol=0.3)
 
 
 def test_forward_with_intermediates():

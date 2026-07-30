@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 
@@ -23,6 +25,38 @@ class GPT(nn.Module):
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.n_layer)])
         self.ln_f = nn.LayerNorm(config.n_embd)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+
+        self.apply(self._init_weights)
+        self._scale_residual_projections()
+
+        # weight tying: the output head reuses the token embedding matrix
+        self.lm_head.weight = self.token_emb.weight
+
+    def _init_weights(self, module):
+        """GPT-2-style init: N(0, 0.02) for Linear/Embedding weights, zero biases."""
+        if isinstance(module, nn.Linear):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
+    def _scale_residual_projections(self):
+        """Scale down each residual branch's final projection by 1/sqrt(2*n_layer),
+        the standard GPT-2 trick to keep residual-stream variance from growing with depth."""
+        std = 0.02 / math.sqrt(2 * self.config.n_layer)
+        matched = 0
+        for name, param in self.named_parameters():
+            if name.endswith("attn.out_proj.weight") or name.endswith("mlp.fc_out.weight"):
+                nn.init.normal_(param, mean=0.0, std=std)
+                matched += 1
+
+        expected = 2 * self.config.n_layer
+        assert matched == expected, (
+            f"expected to scale {expected} residual-branch projections "
+            f"(2 per layer x {self.config.n_layer} layers), matched {matched} — "
+            "check for a layer/attribute rename"
+        )
 
     def forward(self, idx, return_intermediates=False):
         B, T = idx.shape
