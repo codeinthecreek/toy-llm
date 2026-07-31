@@ -72,3 +72,18 @@ def test_forward_with_intermediates():
         assert torch.allclose(attn_weights.sum(dim=-1), torch.ones(batch_size, config.n_head, seq_len))
         upper_triangle = torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool()
         assert torch.all(attn_weights[:, :, upper_triangle] == 0)
+
+
+def test_generate_appends_requested_tokens_and_respects_block_size():
+    config, model = make_model()
+    batch_size, prompt_len = 2, 3
+    idx = torch.randint(0, config.vocab_size, (batch_size, prompt_len))
+
+    max_new_tokens = config.block_size * 2  # exceeds block_size to exercise the cropping path
+    out = model.generate(idx, max_new_tokens=max_new_tokens)
+
+    assert out.shape == (batch_size, prompt_len + max_new_tokens)
+    assert torch.equal(out[:, :prompt_len], idx)
+    assert torch.all(out < config.vocab_size) and torch.all(out >= 0)
+    # generate() should restore the model's prior mode rather than leaving it in eval()
+    assert model.training

@@ -3,4 +3,7 @@ torch
 torchvision
 torchaudio
 pytest
+fastapi
+uvicorn[standard]
+httpx
 

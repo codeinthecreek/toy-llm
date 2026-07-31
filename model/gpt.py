@@ -81,3 +81,25 @@ class GPT(nn.Module):
             return logits, None
 
         return logits, block_intermediates
+
+    @torch.no_grad()
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+        """Autoregressively sample `max_new_tokens` tokens following `idx` (B, T)."""
+        was_training = self.training
+        self.eval()
+
+        for _ in range(max_new_tokens):
+            idx_cond = idx[:, -self.config.block_size :]
+            logits, _ = self(idx_cond)
+            logits = logits[:, -1, :] / temperature
+
+            if top_k is not None:
+                top_values, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < top_values[:, [-1]]] = float("-inf")
+
+            probs = torch.softmax(logits, dim=-1)
+            next_id = torch.multinomial(probs, num_samples=1)
+            idx = torch.cat([idx, next_id], dim=1)
+
+        self.train(was_training)
+        return idx
