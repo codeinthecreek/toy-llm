@@ -130,6 +130,58 @@ enforced by Claude Code itself, not OS-level sandboxing — git discipline
 (commit before letting Claude Code make non-trivial changes) is the actual
 fallback if something gets through.
 
+## Dashboard architecture
+
+**FastAPI backend, polling-based file tail.** The backend reads
+`runs/<run_id>/snapshots.jsonl` from the last known offset on a short
+interval (starting around 200-500ms) rather than watching the filesystem
+with something like `watchdog`/inotify. At this project's snapshot cadence,
+polling is very likely indistinguishable from a filesystem watch to a human
+eye, and it avoids an extra dependency and moving part. Revisit only if
+polling is observed to feel laggy in practice.
+
+**Server-Sent Events (SSE) for pushing updates to the browser, not
+WebSocket.** The training and architecture views only ever need the server
+to push new data to the browser — the browser never needs to push data
+back. SSE is a one-directional protocol that matches this shape exactly and
+is simpler than WebSocket (plain HTTP, no handshake/connection-state
+management). WebSocket's bidirectional capability would be unused overhead
+here.
+
+**Inference/playground view is a separate, non-streaming-log concern.**
+Typing a prompt and generating a response is a genuine request/response
+interaction, not a push scenario — it's served by a plain HTTP endpoint that
+streams the generated tokens back as they're produced, independent of the
+SSE/polling mechanism used for the other two views. The three dashboard
+views intentionally do not share a single update mechanism, since they have
+different data-freshness needs (architecture is near-static, training is
+continuously live, inference is on-demand).
+
+**Run selector built in from the start**, not deferred to a later
+iteration. Each run lives in its own `runs/<run_id>/` directory; the
+dashboard lets you pick which run's data to view rather than always
+assuming "the current run." This was chosen over a v1-only-shows-latest-run
+approach because comparing a new run's training curve against a previous
+one seems likely to be genuinely useful given the project's exploratory
+nature, and retrofitting a run selector later is more work than building it
+in from the start.
+
+**Frontend: plain HTML/JS + Plotly, no framework, no build step.** Chosen
+specifically because there's no existing frontend background to build on —
+the deciding factor was which option requires the least new skill just to
+get a chart on screen, not which is most capable in the abstract. Plotly
+was chosen over D3 or Chart.js because it has heatmaps as a first-class,
+built-in chart type (`type: 'heatmap'`), which matters because the
+attention-weight visualization was identified as the most bespoke part of
+the dashboard; D3 could do this too but requires learning its whole
+data-binding programming model first, which is a much larger investment. A
+framework (React) was ruled out because the dashboard's three views are
+loosely coupled panels, not an app with complex coordinated interactive
+state — the shape that would justify a framework's overhead. Practically,
+the dashboard is a single HTML file that pulls in Plotly from a CDN
+`<script>` tag, plus vanilla JS to receive data (via SSE or polling) and
+call `Plotly.newPlot()` / `Plotly.extendTraces()`.
+
 ## Commit conventions
 
 Commits with substantial Claude Code-authored content carry a
@@ -139,7 +191,6 @@ commits — not worth rewriting history for a cosmetic trailer.
 
 ## Open questions / not yet decided
 
-- Dashboard frontend framework/library — not yet chosen.
 - Exact PCA vs. t-SNE tradeoff for the embedding-projection view (PCA is
   cheap enough to compute at every M-step snapshot; t-SNE was discussed as
   better for periodic, less-frequent snapshots given its cost, but this
