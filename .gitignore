@@ -7,3 +7,5 @@ checkpoints/
 *.pt
 data/*.txt
 !data/.gitkeep
+data/shakespeare/
+runs/
