@@ -3,6 +3,13 @@
 A small hand-written transformer built for learning — the goal is to visualize
 architecture, training, and inference, not to produce a usable model.
 
+## Design rationale
+
+See DESIGN.md for the reasoning behind architectural decisions (model
+implementation choices, process separation, instrumentation cadence,
+environment setup, tooling tradeoffs). Consult it before revisiting a
+decision that's already been made and justified there.
+
 ## Environment
 - Python 3.12.12 via pyenv virtualenv `toy-llm` (already active before Claude Code runs) — do not create a new venv or use system pip.
 - torch: CUDA 13.0 build, installed with `--extra-index-url` (not `--index-url`, due to a known cu130 packaging bug).
