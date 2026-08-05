@@ -239,3 +239,69 @@ def test_generate_endpoint_400_for_out_of_vocab_prompt(tmp_path):
     client = TestClient(create_app(runs_dir=tmp_path / "runs"))
     response = client.post(f"/api/runs/{run_dir.name}/generate", json={"prompt": "$$$"})
     assert response.status_code == 400
+
+
+# --- architecture and attention endpoints -------------------------------------
+
+
+def test_architecture_endpoint_returns_config_and_parameter_shapes(tmp_path):
+    run_dir, _ = _train_tiny_run(tmp_path)
+
+    client = TestClient(create_app(runs_dir=tmp_path / "runs"))
+    response = client.get(f"/api/runs/{run_dir.name}/architecture")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["step"] == 10  # latest checkpoint from _train_tiny_run
+    assert body["config"]["n_layer"] == 2
+    assert body["total_params"] == sum(p["num_params"] for p in body["parameters"])
+
+    by_name = {p["name"]: p for p in body["parameters"]}
+    assert by_name["token_emb.weight"]["shape"] == [body["config"]["vocab_size"], body["config"]["n_embd"]]
+    assert "mean" in by_name["token_emb.weight"]["stats"]
+
+
+def test_architecture_endpoint_respects_step_query_param(tmp_path):
+    run_dir, _ = _train_tiny_run(tmp_path)
+
+    client = TestClient(create_app(runs_dir=tmp_path / "runs"))
+    response = client.get(f"/api/runs/{run_dir.name}/architecture", params={"step": 0})
+
+    assert response.status_code == 200
+    assert response.json()["step"] == 0
+
+
+def test_architecture_endpoint_404_for_unknown_run(tmp_path):
+    client = TestClient(create_app(runs_dir=tmp_path / "runs"))
+    response = client.get("/api/runs/no-such-run/architecture")
+    assert response.status_code == 404
+
+
+def test_attention_endpoint_returns_per_layer_weights_for_given_text(tmp_path):
+    run_dir, vocab_meta = _train_tiny_run(tmp_path)
+    text = "".join(list(vocab_meta["itos"].values())[:3])
+
+    client = TestClient(create_app(runs_dir=tmp_path / "runs"))
+    response = client.post(f"/api/runs/{run_dir.name}/attention", json={"text": text})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tokens"] == list(text)
+    assert len(body["layers"]) == 2  # n_layer from _train_tiny_run
+    # attn_weights: (n_head, T, T)
+    attn = body["layers"][0]["attn_weights"]
+    assert len(attn[0]) == len(text)
+    assert len(attn[0][0]) == len(text)
+
+
+def test_attention_endpoint_404_for_unknown_run(tmp_path):
+    client = TestClient(create_app(runs_dir=tmp_path / "runs"))
+    response = client.post("/api/runs/no-such-run/attention", json={"text": "a"})
+    assert response.status_code == 404
+
+
+def test_attention_endpoint_400_for_out_of_vocab_text(tmp_path):
+    run_dir, _ = _train_tiny_run(tmp_path)
+    client = TestClient(create_app(runs_dir=tmp_path / "runs"))
+    response = client.post(f"/api/runs/{run_dir.name}/attention", json={"text": "$$$"})
+    assert response.status_code == 400

@@ -157,6 +157,19 @@ views intentionally do not share a single update mechanism, since they have
 different data-freshness needs (architecture is near-static, training is
 continuously live, inference is on-demand).
 
+**Architecture and attention-for-text endpoints read checkpoints directly,
+not the snapshot log.** `GET /api/runs/{run_id}/architecture` and
+`POST /api/runs/{run_id}/attention` were added alongside the frontend
+because two pieces of data it needs were never in `snapshots.jsonl`: full
+parameter shapes and model config (the log's `histogram` events only carry
+summary stats, logged that way deliberately — see "Instrumentation
+cadence") and attention weights for arbitrary playground text (the log's
+`attention_sample` events only cover one fixed validation input, and
+`/generate` is intentionally plain-text with no side channel — see below).
+Both new endpoints load a checkpoint straight off disk and run inference
+against it, matching the existing `/generate` endpoint's "reload each
+request, no caching" approach rather than introducing a new one.
+
 **Run selector built in from the start**, not deferred to a later
 iteration. Each run lives in its own `runs/<run_id>/` directory; the
 dashboard lets you pick which run's data to view rather than always

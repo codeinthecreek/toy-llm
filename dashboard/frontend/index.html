@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>toy-llm dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6; /* blue: weights, loss, sequential base */
+    --series-2:       #eb6834; /* orange: grads */
+    --series-1-soft:  #cde2fb;
+    --danger:         #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --series-1-soft:  #184f95;
+      --danger:         #e66767;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    padding: 0.85rem 1.25rem;
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 1.05rem;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .run-picker { display: flex; align-items: center; gap: 0.5rem; }
+  .run-picker label { color: var(--text-secondary); font-size: 0.85rem; }
+  select, input, button, textarea {
+    font-family: inherit;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    background: var(--page);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+  }
+  button {
+    cursor: pointer;
+    background: var(--series-1);
+    color: white;
+    border: none;
+    font-weight: 600;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #status-line {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  #status-line.error { color: var(--danger); }
+
+  nav.tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0 1.25rem;
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border);
+  }
+  nav.tabs button {
+    background: none;
+    color: var(--text-secondary);
+    font-weight: 500;
+    border-radius: 0;
+    padding: 0.65rem 0.9rem;
+    border-bottom: 2px solid transparent;
+  }
+  nav.tabs button.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--series-1);
+  }
+
+  main { padding: 1.25rem; max-width: 1400px; margin: 0 auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    margin-bottom: 1.1rem;
+  }
+  .card h2 { font-size: 0.95rem; margin: 0 0 0.75rem; }
+  .card h2 .step-badge {
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-left: 0.4rem;
+  }
+  .chart-scroll { overflow-x: auto; }
+  .chart { width: 100%; min-height: 320px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+  .grid-2 > .card { min-width: 0; }
+  @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .config-grid .stat { text-align: left; }
+  .config-grid .stat .label { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  .config-grid .stat .value { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+  th, td { text-align: right; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--gridline); font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; font-variant-numeric: normal; }
+  th { color: var(--text-muted); font-weight: 500; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.02em; }
+
+  .field-row { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.9rem; }
+  .field { display: flex; flex-direction: column; gap: 0.3rem; }
+  .field label { font-size: 0.78rem; color: var(--text-secondary); }
+  .field input { width: 8rem; }
+  textarea#prompt { width: 100%; min-height: 4.5rem; resize: vertical; }
+  #generate-output {
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--page);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    min-height: 3rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.85rem;
+  }
+  .selector-row { display: flex; gap: 1rem; margin-bottom: 0.6rem; align-items: center; }
+  .selector-row label { font-size: 0.8rem; color: var(--text-secondary); }
+  .empty-note { color: var(--text-muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>toy-llm dashboard</h1>
+  <div class="run-picker">
+    <label for="run-select">Run</label>
+    <select id="run-select"><option>Loading runs…</option></select>
+  </div>
+  <span id="status-line"></span>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="architecture">Architecture</button>
+  <button class="tab-btn" data-tab="training">Training</button>
+  <button class="tab-btn" data-tab="inference">Inference</button>
+</nav>
+
+<main>
+
+  <!-- Architecture -->
+  <section id="panel-architecture" class="panel active">
+    <div class="card">
+      <h2>Model config<span class="step-badge" id="arch-step-badge"></span></h2>
+      <div class="config-grid" id="arch-config-grid"><span class="empty-note">Select a run to load its architecture.</span></div>
+    </div>
+    <div class="card">
+      <h2>Parameters by tensor</h2>
+      <div class="chart-scroll"><div id="arch-param-chart" class="chart"></div></div>
+    </div>
+    <div class="card">
+      <h2>Parameter table</h2>
+      <div class="chart-scroll">
+        <table id="arch-param-table">
+          <thead><tr><th>name</th><th>shape</th><th>params</th><th>mean</th><th>std</th><th>min</th><th>max</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Training -->
+  <section id="panel-training" class="panel">
+    <div class="card">
+      <h2>Loss<span class="step-badge" id="loss-step-badge"></span></h2>
+      <div id="loss-chart" class="chart"></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Weight distribution<span class="step-badge" id="weight-step-badge"></span></h2>
+        <div class="chart-scroll"><div id="weight-box-chart" class="chart"></div></div>
+      </div>
+      <div class="card">
+        <h2>Gradient distribution<span class="step-badge" id="grad-step-badge"></span></h2>
+        <div class="chart-scroll"><div id="grad-box-chart" class="chart"></div></div>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Embedding PCA<span class="step-badge" id="embed-step-badge"></span></h2>
+        <div id="embedding-chart" class="chart"></div>
+      </div>
+      <div class="card">
+        <h2>Attention sample<span class="step-badge" id="attn-step-badge"></span></h2>
+        <div class="selector-row">
+          <label for="train-attn-layer">Layer</label>
+          <select id="train-attn-layer"></select>
+          <label for="train-attn-head">Head</label>
+          <select id="train-attn-head"></select>
+        </div>
+        <div id="train-attn-chart" class="chart"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Inference -->
+  <section id="panel-inference" class="panel">
+    <div class="card">
+      <h2>Generate</h2>
+      <div class="field">
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" placeholder="Type a prompt using characters from the run's training vocabulary…"></textarea>
+      </div>
+      <div class="field-row">
+        <div class="field"><label for="max-new-tokens">Max new tokens</label><input id="max-new-tokens" type="number" value="200" min="1" max="2000"></div>
+        <div class="field"><label for="temperature">Temperature</label><input id="temperature" type="number" value="1.0" min="0.01" step="0.05"></div>
+        <div class="field"><label for="top-k">Top-k (optional)</label><input id="top-k" type="number" placeholder="none" min="1"></div>
+        <div class="field"><label for="checkpoint-select">Checkpoint</label><select id="checkpoint-select"></select></div>
+        <button id="generate-btn">Generate</button>
+      </div>
+      <div id="generate-output"></div>
+    </div>
+    <div class="card">
+      <h2>Attention for generation</h2>
+      <div class="selector-row">
+        <label for="infer-attn-layer">Layer</label>
+        <select id="infer-attn-layer"></select>
+        <label for="infer-attn-head">Head</label>
+        <select id="infer-attn-head"></select>
+      </div>
+      <div id="infer-attn-chart" class="chart"></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const state = {
+  runs: [],
+  runId: null,
+  activeTab: 'architecture',
+  eventSource: null,
+  streamedRunId: null,
+  lossInitialized: false,
+  latestAttentionSample: null,   // {step, layers}
+  latestInferAttention: null,    // {tokens, layers}
+};
+
+// --- theme -------------------------------------------------------------
+
+function isDarkMode() {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function plotlyThemeLayout() {
+  const dark = isDarkMode();
+  const css = getComputedStyle(document.documentElement);
+  return {
+    paper_bgcolor: css.getPropertyValue('--surface-1').trim(),
+    plot_bgcolor: css.getPropertyValue('--surface-1').trim(),
+    font: { color: css.getPropertyValue('--text-secondary').trim(), size: 11 },
+    margin: { t: 10, r: 20, b: 60, l: 50 },
+    xaxis: { gridcolor: css.getPropertyValue('--gridline').trim(), zerolinecolor: css.getPropertyValue('--baseline').trim() },
+    yaxis: { gridcolor: css.getPropertyValue('--gridline').trim(), zerolinecolor: css.getPropertyValue('--baseline').trim() },
+  };
+}
+
+const chartIds = [
+  'arch-param-chart', 'loss-chart', 'weight-box-chart', 'grad-box-chart',
+  'embedding-chart', 'train-attn-chart', 'infer-attn-chart',
+];
+
+function retheme() {
+  const layout = plotlyThemeLayout();
+  for (const id of chartIds) {
+    const el = document.getElementById(id);
+    if (el && el.data) Plotly.relayout(el, layout);
+  }
+}
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
+
+const HEAT_COLORSCALE = [
+  [0, '#cde2fb'], [0.166, '#9ec5f4'], [0.333, '#6da7ec'], [0.5, '#3987e5'],
+  [0.666, '#256abf'], [0.833, '#184f95'], [1, '#0d366b'],
+];
+
+// --- status line ---------------------------------------------------------
+
+function setStatus(text, isError) {
+  const el = document.getElementById('status-line');
+  el.textContent = text;
+  el.classList.toggle('error', !!isError);
+}
+
+// --- run list / selection -------------------------------------------------
+
+async function loadRuns() {
+  try {
+    const res = await fetch('/api/runs');
+    if (!res.ok) throw new Error(`GET /api/runs -> ${res.status}`);
+    state.runs = await res.json();
+  } catch (err) {
+    setStatus(`Failed to load runs: ${err.message}`, true);
+    return;
+  }
+
+  const select = document.getElementById('run-select');
+  select.innerHTML = '';
+  if (state.runs.length === 0) {
+    select.innerHTML = '<option>No runs found</option>';
+    setStatus('No runs in runs/ yet');
+    return;
+  }
+  for (const run of state.runs) {
+    const opt = document.createElement('option');
+    opt.value = run.run_id;
+    const when = new Date(run.last_updated * 1000).toLocaleString();
+    opt.textContent = `${run.run_id} (updated ${when})`;
+    select.appendChild(opt);
+  }
+  setStatus('');
+  selectRun(state.runs[0].run_id);
+}
+
+function selectRun(runId) {
+  state.runId = runId;
+  document.getElementById('run-select').value = runId;
+  closeStream();
+  state.latestAttentionSample = null;
+  state.latestInferAttention = null;
+  populateCheckpointSelect();
+  loadForActiveTab();
+}
+
+function currentRunMeta() {
+  return state.runs.find((r) => r.run_id === state.runId);
+}
+
+function populateCheckpointSelect() {
+  const select = document.getElementById('checkpoint-select');
+  select.innerHTML = '<option value="">latest</option>';
+  const meta = currentRunMeta();
+  if (!meta) return;
+  for (const step of meta.checkpoint_steps) {
+    const opt = document.createElement('option');
+    opt.value = step;
+    opt.textContent = `step ${step}`;
+    select.appendChild(opt);
+  }
+}
+
+document.getElementById('run-select').addEventListener('change', (e) => selectRun(e.target.value));
+
+// --- tabs ------------------------------------------------------------------
+
+function switchTab(tab) {
+  state.activeTab = tab;
+  for (const btn of document.querySelectorAll('.tab-btn')) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  }
+  for (const panel of document.querySelectorAll('.panel')) {
+    panel.classList.toggle('active', panel.id === `panel-${tab}`);
+  }
+  loadForActiveTab();
+}
+
+for (const btn of document.querySelectorAll('.tab-btn')) {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+}
+
+function loadForActiveTab() {
+  if (!state.runId) return;
+  if (state.activeTab === 'architecture') loadArchitecture();
+  if (state.activeTab === 'training') ensureStream();
+}
+
+// --- architecture view -------------------------------------------------
+
+async function loadArchitecture() {
+  setStatus(`Loading architecture for ${state.runId}…`);
+  try {
+    const res = await fetch(`/api/runs/${encodeURIComponent(state.runId)}/architecture`);
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    renderArchitecture(await res.json());
+    setStatus('');
+  } catch (err) {
+    setStatus(`Failed to load architecture: ${err.message}`, true);
+  }
+}
+
+function renderArchitecture(data) {
+  document.getElementById('arch-step-badge').textContent = `step ${data.step}`;
+
+  const grid = document.getElementById('arch-config-grid');
+  grid.innerHTML = '';
+  const entries = [...Object.entries(data.config), ['total_params', data.total_params]];
+  for (const [label, value] of entries) {
+    const stat = document.createElement('div');
+    stat.className = 'stat';
+    stat.innerHTML = `<div class="label">${label}</div><div class="value">${value}</div>`;
+    grid.appendChild(stat);
+  }
+
+  const names = data.parameters.map((p) => p.name);
+  const counts = data.parameters.map((p) => p.num_params);
+  Plotly.react('arch-param-chart', [{
+    type: 'bar', x: names, y: counts, marker: { color: getComputedStyle(document.documentElement).getPropertyValue('--series-1').trim() },
+  }], {
+    ...plotlyThemeLayout(),
+    xaxis: { ...plotlyThemeLayout().xaxis, tickangle: -45, automargin: true },
+    yaxis: { ...plotlyThemeLayout().yaxis, title: 'parameters' },
+    width: Math.max(600, names.length * 55),
+  }, { responsive: true, displayModeBar: false });
+
+  const tbody = document.querySelector('#arch-param-table tbody');
+  tbody.innerHTML = '';
+  for (const p of data.parameters) {
+    const tr = document.createElement('tr');
+    const s = p.stats;
+    tr.innerHTML = `<td>${p.name}</td><td>${p.shape.join(' × ')}</td><td>${p.num_params.toLocaleString()}</td>` +
+      `<td>${s.mean.toFixed(4)}</td><td>${s.std.toFixed(4)}</td><td>${s.min.toFixed(4)}</td><td>${s.max.toFixed(4)}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+// --- training view: SSE stream ---------------------------------------------
+
+function closeStream() {
+  if (state.eventSource) {
+    state.eventSource.close();
+    state.eventSource = null;
+    state.streamedRunId = null;
+  }
+}
+
+function ensureStream() {
+  if (state.streamedRunId === state.runId && state.eventSource) return;
+  closeStream();
+  state.lossInitialized = false;
+  initLossChart();
+
+  const runId = state.runId;
+  const es = new EventSource(`/api/runs/${encodeURIComponent(runId)}/stream`);
+  state.eventSource = es;
+  state.streamedRunId = runId;
+
+  es.addEventListener('loss', (e) => onLossEvent(JSON.parse(e.data)));
+  es.addEventListener('histogram', (e) => onHistogramEvent(JSON.parse(e.data)));
+  es.addEventListener('attention_sample', (e) => onAttentionSampleEvent(JSON.parse(e.data)));
+  es.addEventListener('embedding_projection', (e) => onEmbeddingEvent(JSON.parse(e.data)));
+  es.onopen = () => setStatus(`Streaming ${runId}`);
+  es.onerror = () => setStatus(`Stream error for ${runId} (will retry)`, true);
+}
+
+function initLossChart() {
+  const layout = plotlyThemeLayout();
+  Plotly.react('loss-chart', [{
+    type: 'scatter', mode: 'lines', x: [], y: [],
+    line: { color: getComputedStyle(document.documentElement).getPropertyValue('--series-1').trim(), width: 2 },
+    hovertemplate: 'step %{x}<br>loss %{y:.4f}<extra></extra>',
+  }], { ...layout, xaxis: { ...layout.xaxis, title: 'step' }, yaxis: { ...layout.yaxis, title: 'loss' } },
+  { responsive: true, displayModeBar: false });
+}
+
+function onLossEvent(evt) {
+  const el = document.getElementById('loss-chart');
+  Plotly.extendTraces(el, { x: [[evt.step]], y: [[evt.value]] }, [0]);
+  document.getElementById('loss-step-badge').textContent = `step ${evt.step}`;
+}
+
+function boxTraceFromStats(statsByName, color) {
+  const names = Object.keys(statsByName);
+  return [{
+    type: 'box', boxpoints: false,
+    x: names,
+    q1: names.map((n) => statsByName[n].p25),
+    median: names.map((n) => statsByName[n].p50),
+    q3: names.map((n) => statsByName[n].p75),
+    lowerfence: names.map((n) => statsByName[n].min),
+    upperfence: names.map((n) => statsByName[n].max),
+    marker: { color },
+    line: { color },
+  }];
+}
+
+function onHistogramEvent(evt) {
+  const layout = plotlyThemeLayout();
+  const c1 = getComputedStyle(document.documentElement).getPropertyValue('--series-1').trim();
+  const c2 = getComputedStyle(document.documentElement).getPropertyValue('--series-2').trim();
+  const names = Object.keys(evt.weights);
+
+  Plotly.react('weight-box-chart', boxTraceFromStats(evt.weights, c1), {
+    ...layout, xaxis: { ...layout.xaxis, tickangle: -45, automargin: true }, showlegend: false,
+    width: Math.max(600, names.length * 55),
+  }, { responsive: true, displayModeBar: false });
+
+  Plotly.react('grad-box-chart', boxTraceFromStats(evt.grads, c2), {
+    ...layout, xaxis: { ...layout.xaxis, tickangle: -45, automargin: true }, showlegend: false,
+    width: Math.max(600, names.length * 55),
+  }, { responsive: true, displayModeBar: false });
+
+  document.getElementById('weight-step-badge').textContent = `step ${evt.step}`;
+  document.getElementById('grad-step-badge').textContent = `step ${evt.step}`;
+}
+
+function onEmbeddingEvent(evt) {
+  const layout = plotlyThemeLayout();
+  const c1 = getComputedStyle(document.documentElement).getPropertyValue('--series-1').trim();
+  const xs = evt.projection.map((p) => p[0]);
+  const ys = evt.projection.map((p) => p[1]);
+  const showText = evt.tokens && evt.tokens.length <= 100;
+
+  Plotly.react('embedding-chart', [{
+    type: 'scatter', mode: showText ? 'markers+text' : 'markers',
+    x: xs, y: ys,
+    text: evt.tokens || undefined,
+    textposition: 'top center',
+    textfont: { size: 9 },
+    hovertext: evt.tokens || undefined,
+    marker: { color: c1, size: 8 },
+  }], { ...layout, xaxis: { ...layout.xaxis, title: 'PC1' }, yaxis: { ...layout.yaxis, title: 'PC2' } },
+  { responsive: true, displayModeBar: false });
+
+  document.getElementById('embed-step-badge').textContent = `step ${evt.step}`;
+}
+
+function onAttentionSampleEvent(evt) {
+  state.latestAttentionSample = evt;
+  document.getElementById('attn-step-badge').textContent = `step ${evt.step}`;
+  populateLayerHeadSelectors('train-attn-layer', 'train-attn-head', evt.layers);
+  renderTrainAttentionHeatmap();
+}
+
+function populateLayerHeadSelectors(layerSelectId, headSelectId, layers) {
+  const layerSelect = document.getElementById(layerSelectId);
+  const headSelect = document.getElementById(headSelectId);
+  const nLayer = layers.length;
+  const nHead = nLayer > 0 ? layers[0].attn_weights.length : 0;
+
+  if (layerSelect.options.length !== nLayer) {
+    layerSelect.innerHTML = '';
+    for (let i = 0; i < nLayer; i++) {
+      const opt = document.createElement('option');
+      opt.value = i; opt.textContent = `layer ${i}`;
+      layerSelect.appendChild(opt);
+    }
+  }
+  if (headSelect.options.length !== nHead) {
+    headSelect.innerHTML = '';
+    for (let i = 0; i < nHead; i++) {
+      const opt = document.createElement('option');
+      opt.value = i; opt.textContent = `head ${i}`;
+      headSelect.appendChild(opt);
+    }
+  }
+}
+
+function renderTrainAttentionHeatmap() {
+  const evt = state.latestAttentionSample;
+  if (!evt) return;
+  const layerIdx = Number(document.getElementById('train-attn-layer').value || 0);
+  const headIdx = Number(document.getElementById('train-attn-head').value || 0);
+  const layer = evt.layers[layerIdx];
+  if (!layer) return;
+  const z = layer.attn_weights[headIdx];
+  renderAttentionHeatmap('train-attn-chart', z, null);
+}
+
+document.getElementById('train-attn-layer').addEventListener('change', renderTrainAttentionHeatmap);
+document.getElementById('train-attn-head').addEventListener('change', renderTrainAttentionHeatmap);
+
+function renderAttentionHeatmap(elId, z, tokens) {
+  const layout = plotlyThemeLayout();
+  const ticks = tokens || z.map((_, i) => String(i));
+  Plotly.react(elId, [{
+    type: 'heatmap', z, x: ticks, y: ticks,
+    colorscale: HEAT_COLORSCALE, zmin: 0, zmax: 1,
+    hovertemplate: 'query %{y}<br>key %{x}<br>weight %{z:.3f}<extra></extra>',
+  }], {
+    ...layout,
+    xaxis: { ...layout.xaxis, title: 'key position', type: 'category' },
+    yaxis: { ...layout.yaxis, title: 'query position', type: 'category', autorange: 'reversed' },
+  }, { responsive: true, displayModeBar: false });
+}
+
+// --- inference / playground view -------------------------------------------
+
+async function generate() {
+  if (!state.runId) return;
+  const btn = document.getElementById('generate-btn');
+  const output = document.getElementById('generate-output');
+  const prompt = document.getElementById('prompt').value;
+  const maxNewTokens = Number(document.getElementById('max-new-tokens').value || 200);
+  const temperature = Number(document.getElementById('temperature').value || 1.0);
+  const topKRaw = document.getElementById('top-k').value;
+  const topK = topKRaw ? Number(topKRaw) : null;
+  const checkpointRaw = document.getElementById('checkpoint-select').value;
+  const checkpointStep = checkpointRaw ? Number(checkpointRaw) : null;
+
+  btn.disabled = true;
+  output.textContent = prompt;
+  setStatus('Generating…');
+
+  let generated = '';
+  try {
+    const res = await fetch(`/api/runs/${encodeURIComponent(state.runId)}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt, max_new_tokens: maxNewTokens, temperature, top_k: topK, checkpoint_step: checkpointStep,
+      }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      generated += decoder.decode(value, { stream: true });
+      output.textContent = prompt + generated;
+    }
+    setStatus('Generation complete');
+  } catch (err) {
+    setStatus(`Generation failed: ${err.message}`, true);
+    btn.disabled = false;
+    return;
+  }
+
+  btn.disabled = false;
+  await loadInferAttention(prompt + generated);
+}
+
+async function loadInferAttention(text) {
+  if (!text) return;
+  try {
+    const res = await fetch(`/api/runs/${encodeURIComponent(state.runId)}/attention`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    state.latestInferAttention = await res.json();
+    populateLayerHeadSelectors('infer-attn-layer', 'infer-attn-head', state.latestInferAttention.layers);
+    renderInferAttentionHeatmap();
+  } catch (err) {
+    setStatus(`Failed to load attention: ${err.message}`, true);
+  }
+}
+
+function renderInferAttentionHeatmap() {
+  const data = state.latestInferAttention;
+  if (!data) return;
+  const layerIdx = Number(document.getElementById('infer-attn-layer').value || 0);
+  const headIdx = Number(document.getElementById('infer-attn-head').value || 0);
+  const layer = data.layers[layerIdx];
+  if (!layer) return;
+  renderAttentionHeatmap('infer-attn-chart', layer.attn_weights[headIdx], data.tokens);
+}
+
+document.getElementById('infer-attn-layer').addEventListener('change', renderInferAttentionHeatmap);
+document.getElementById('infer-attn-head').addEventListener('change', renderInferAttentionHeatmap);
+document.getElementById('generate-btn').addEventListener('click', generate);
+
+// --- init --------------------------------------------------------------
+
+loadRuns();
+</script>
+
+</body>
+</html>
