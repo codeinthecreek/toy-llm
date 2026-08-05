@@ -26,6 +26,24 @@ A small hand-written transformer for visualizing architecture, training, and inf
 ```
    Should print `True`.
 
+## Training
+
+Training and the dashboard are separate processes — run them side by side to
+watch a run in progress.
+
+```bash
+python train.py
+```
+
+Each invocation starts a new run, writing checkpoints and a streamed
+`snapshots.jsonl` log to a fresh `runs/<timestamp>_<id>/` directory. Useful
+flags:
+
+- `--max-steps 2000` — total training steps
+- `--log-every 50` — weight/gradient histogram + attention-sample cadence
+- `--checkpoint-every 500` — checkpoint + embedding-PCA cadence
+- `--n-layer` / `--n-head` / `--n-embd` / `--block-size` — model size
+
 ## Dashboard
 
 The dashboard backend serves the frontend too, so one command runs both:
@@ -41,6 +59,11 @@ Then open `http://127.0.0.1:8000/` in a browser.
   frontend-only edits, since `index.html` is served fresh from disk each
   request.
 - Add `--port` if 8000 is already taken.
+- The dashboard can be started before or after `train.py` — it just reads
+  whatever's in `runs/` and tails the file. Pick the run from the "Run"
+  dropdown and open the **Training** tab to watch loss, weight/gradient
+  distributions, embedding PCA, and attention samples update live as
+  training progresses.
 
 ## Notes
 - `pyenv local toy-llm` writes `.python-version` — as long as you `cd` into the repo with pyenv's shell hook active, the venv activates automatically. No manual `source .venv/bin/activate` needed.
