@@ -116,3 +116,7 @@ Then open `http://127.0.0.1:8000/` in a browser.
 - `pyenv local toy-llm` writes `.python-version` — as long as you `cd` into the repo with pyenv's shell hook active, the venv activates automatically. No manual `source .venv/bin/activate` needed.
 - To list existing pyenv virtualenvs: `pyenv virtualenvs`
 - To remove this one if you need to rebuild it: `pyenv uninstall toy-llm`
+
+## License
+
+BSD 3-Clause. See [LICENSE](LICENSE).
