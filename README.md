@@ -43,6 +43,48 @@ flags:
 - `--log-every 50` — weight/gradient histogram + attention-sample cadence
 - `--checkpoint-every 500` — checkpoint + embedding-PCA cadence
 - `--n-layer` / `--n-head` / `--n-embd` / `--block-size` — model size
+- `--batch-size 32` — samples per gradient step
+
+### Choosing parameters
+
+This project's priority is legibility over capability (see DESIGN.md), so
+pick these with "what will this look like in the dashboard" in mind rather
+than optimizing for loss:
+
+- **Model size** (`n_layer`, `n_head`, `n_embd`, `block_size`): keep small.
+  `n_layer × n_head` is how many attention heatmaps you browse in the
+  selector, and `n_embd` is what gets PCA'd to 2D — both get hard to read
+  past a handful. `2/2/64/64` (~108K params) is a good default: enough
+  structure to compare early vs. late layers, small enough that the
+  parameter table and bar chart in the Architecture tab don't need
+  scrolling. The GPU (GTX 1650, 4GB) is not the constraint here.
+- **`max_steps`**: 300 is a quick smoke test — enough to confirm the
+  pipeline and dashboard work end to end, but the loss curve barely
+  flattens. 1500–2000 shows a real decay-then-plateau shape on
+  char-level tiny-shakespeare.
+- **`log_every` ("N")**: trades a smoother-looking histogram/attention
+  animation against per-snapshot GPU→CPU overhead. Aim for ~15–30
+  snapshots total, i.e. `max_steps / 20`.
+- **`checkpoint_every` ("M", must be `M >> N`)**: controls how many
+  points you get in the Architecture tab's checkpoint selector. Each
+  checkpoint is a full state dict (~1.3MB at this model size) plus an
+  embedding PCA pass — cheap, so pick based on how many points-in-time
+  you want to compare (3–5 is usually plenty).
+- **`batch_size`**: smaller batches (e.g. 16) give a noisier, more
+  visually "alive" loss curve; memory isn't a real constraint at this
+  scale either way.
+
+Two presets:
+
+```bash
+# Quick smoke test — verify the pipeline and dashboard render correctly
+python train.py --max-steps 300 --log-every 20 --checkpoint-every 100 \
+  --n-layer 2 --n-head 2 --n-embd 64 --block-size 64 --batch-size 16
+
+# Longer run — legible convergence, more checkpoints to browse
+python train.py --max-steps 2000 --log-every 50 --checkpoint-every 400 \
+  --n-layer 2 --n-head 2 --n-embd 64 --block-size 64 --batch-size 32
+```
 
 ## Dashboard
 
