@@ -60,8 +60,12 @@ than optimizing for loss:
   scrolling. The GPU (GTX 1650, 4GB) is not the constraint here.
 - **`max_steps`**: 300 is a quick smoke test — enough to confirm the
   pipeline and dashboard work end to end, but the loss curve barely
-  flattens. 1500–2000 shows a real decay-then-plateau shape on
-  char-level tiny-shakespeare.
+  flattens. 2000 still shows visible descent rather than a plateau
+  (loss dropped ~0.22 in the last 1000 of those steps); on this
+  model/dataset it takes ~8000–10000 steps before the curve actually
+  flattens out (in one measured run, the last 5000 steps only bought
+  another ~0.12) — that's the length worth using if the point is to
+  see a full convergence curve, not just a downward trend.
 - **`log_every` ("N")**: trades a smoother-looking histogram/attention
   animation against per-snapshot GPU→CPU overhead. Aim for ~15–30
   snapshots total, i.e. `max_steps / 20`.
@@ -81,8 +85,9 @@ Two presets:
 python train.py --max-steps 300 --log-every 20 --checkpoint-every 100 \
   --n-layer 2 --n-head 2 --n-embd 64 --block-size 64 --batch-size 16
 
-# Longer run — legible convergence, more checkpoints to browse
-python train.py --max-steps 2000 --log-every 50 --checkpoint-every 400 \
+# Longer run — full convergence curve (plateaus around step ~8000-10000
+# on this model/dataset), several checkpoints to browse
+python train.py --max-steps 10000 --log-every 250 --checkpoint-every 2000 \
   --n-layer 2 --n-head 2 --n-embd 64 --block-size 64 --batch-size 32
 ```
 

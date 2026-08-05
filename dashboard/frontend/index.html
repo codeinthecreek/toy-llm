@@ -283,6 +283,8 @@ const state = {
   lossInitialized: false,
   latestAttentionSample: null,   // {step, layers}
   latestInferAttention: null,    // {tokens, layers}
+  lossBuffer: { x: [], y: [] }, // points buffered between animation frames
+  lossFlushScheduled: false,
 };
 
 // --- theme -------------------------------------------------------------
@@ -500,12 +502,31 @@ function initLossChart() {
     hovertemplate: 'step %{x}<br>loss %{y:.4f}<extra></extra>',
   }], { ...layout, xaxis: { ...layout.xaxis, title: 'step' }, yaxis: { ...layout.yaxis, title: 'loss' } },
   { responsive: true, displayModeBar: false });
+  state.lossBuffer = { x: [], y: [] };
+  state.lossFlushScheduled = false;
 }
 
+// Replaying a long run's log can fire thousands of 'loss' events within a
+// single burst (SSE delivers the backlog as fast as it's read, not paced to
+// real time). Redrawing the chart on every single point froze the tab for
+// the length of the replay, so points are buffered and flushed at most once
+// per animation frame instead.
 function onLossEvent(evt) {
-  const el = document.getElementById('loss-chart');
-  Plotly.extendTraces(el, { x: [[evt.step]], y: [[evt.value]] }, [0]);
+  state.lossBuffer.x.push(evt.step);
+  state.lossBuffer.y.push(evt.value);
   document.getElementById('loss-step-badge').textContent = `step ${evt.step}`;
+  if (!state.lossFlushScheduled) {
+    state.lossFlushScheduled = true;
+    requestAnimationFrame(flushLossBuffer);
+  }
+}
+
+function flushLossBuffer() {
+  state.lossFlushScheduled = false;
+  if (state.lossBuffer.x.length === 0) return;
+  const el = document.getElementById('loss-chart');
+  Plotly.extendTraces(el, { x: [state.lossBuffer.x], y: [state.lossBuffer.y] }, [0]);
+  state.lossBuffer = { x: [], y: [] };
 }
 
 function boxTraceFromStats(statsByName, color) {
