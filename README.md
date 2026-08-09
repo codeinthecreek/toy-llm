@@ -119,6 +119,12 @@ training run — parameter distribution, loss/weight/gradient dynamics,
 embedding PCA across checkpoints, and attention patterns from both training
 and generation.
 
+`docs/embedding_pca_compare.html` is a self-contained interactive chart
+referenced from those findings; GitHub only shows HTML files as source, so
+view it rendered via
+[htmlpreview.github.io](https://htmlpreview.github.io/?https://raw.githubusercontent.com/codeinthecreek/toy-llm/main/docs/embedding_pca_compare.html)
+instead.
+
 ## Notes
 - `pyenv local toy-llm` writes `.python-version` — as long as you `cd` into the repo with pyenv's shell hook active, the venv activates automatically. No manual `source .venv/bin/activate` needed.
 - To list existing pyenv virtualenvs: `pyenv virtualenvs`
