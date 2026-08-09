@@ -112,6 +112,13 @@ Then open `http://127.0.0.1:8000/` in a browser.
   distributions, embedding PCA, and attention samples update live as
   training progresses.
 
+## Findings
+
+[`docs/findings.md`](docs/findings.md) documents observations from an actual
+training run — parameter distribution, loss/weight/gradient dynamics,
+embedding PCA across checkpoints, and attention patterns from both training
+and generation.
+
 ## Notes
 - `pyenv local toy-llm` writes `.python-version` — as long as you `cd` into the repo with pyenv's shell hook active, the venv activates automatically. No manual `source .venv/bin/activate` needed.
 - To list existing pyenv virtualenvs: `pyenv virtualenvs`

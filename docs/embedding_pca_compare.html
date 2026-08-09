@@ -1,0 +1,549 @@
+<title>Embedding PCA across checkpoints — toy-llm</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --cat-whitespace: #2a78d6;
+    --cat-punct:      #eb6834;
+    --cat-letter:     #1baf7a;
+    --tooltip-bg:     #0b0b0b;
+    --tooltip-text:   #fcfcfb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --surface-2:      #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --cat-whitespace: #3987e5;
+      --cat-punct:      #d95926;
+      --cat-letter:     #199e70;
+      --tooltip-bg:     #f2f2ee;
+      --tooltip-text:   #0b0b0b;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --surface-2:      #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --cat-whitespace: #3987e5;
+    --cat-punct:      #d95926;
+    --cat-letter:     #199e70;
+    --tooltip-bg:     #f2f2ee;
+    --tooltip-text:   #0b0b0b;
+  }
+  :root[data-theme="light"] .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --cat-whitespace: #2a78d6;
+    --cat-punct:      #eb6834;
+    --cat-letter:     #1baf7a;
+    --tooltip-bg:     #0b0b0b;
+    --tooltip-text:   #fcfcfb;
+  }
+
+  * { box-sizing: border-box; }
+
+  .viz-root {
+    background: var(--surface-2);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 40px 28px 64px;
+    min-height: 100vh;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  header.page-head {
+    margin-bottom: 28px;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+  }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    margin: 0 0 10px;
+    text-wrap: balance;
+  }
+
+  .dek {
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    max-width: 66ch;
+    margin: 0;
+  }
+
+  .dek code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    padding: 0.05em 0.4em;
+    border-radius: 4px;
+  }
+
+  /* legend */
+  .legend {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 22px 0 20px;
+    padding: 12px 16px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .legend-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex: none;
+  }
+
+  /* panel grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+  }
+
+  .panel {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 14px 10px;
+    position: relative;
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .panel-step {
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .panel-step .unit {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-left: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .panel svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    overflow: visible;
+  }
+
+  .grid-line {
+    stroke: var(--gridline);
+    stroke-width: 1;
+  }
+  .axis-line {
+    stroke: var(--baseline);
+    stroke-width: 1;
+  }
+
+  .pt {
+    stroke: var(--surface-1);
+    stroke-width: 2;
+    pointer-events: none;
+  }
+  .pt-hit {
+    fill: transparent;
+    cursor: pointer;
+  }
+  .pt-hit:focus {
+    outline: none;
+  }
+  .pt-hit:focus + .pt,
+  .pt-hit:hover + .pt {
+    r: 6;
+  }
+
+  /* tooltip */
+  #tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--tooltip-bg);
+    color: var(--tooltip-text);
+    font-size: 12.5px;
+    line-height: 1.4;
+    padding: 6px 9px;
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 10px));
+    transition: opacity 0.08s ease;
+    z-index: 50;
+    white-space: nowrap;
+  }
+  #tooltip.visible { opacity: 1; }
+  #tooltip .tt-glyph {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 700;
+    font-size: 14px;
+  }
+  #tooltip .tt-cat {
+    color: var(--tooltip-text);
+    opacity: 0.65;
+    margin-left: 6px;
+  }
+
+  /* analysis callout */
+  .analysis {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  .note {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .note h3 {
+    font-size: 12px;
+    font-weight: 650;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+  }
+  .note p {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+  .note code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    color: var(--text-primary);
+  }
+
+  /* table view */
+  details.table-view {
+    margin-top: 24px;
+  }
+  details.table-view summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 8px 0;
+  }
+  .table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+  table.data-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12.5px;
+  }
+  table.data-table th,
+  table.data-table td {
+    text-align: left;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--gridline);
+    white-space: nowrap;
+  }
+  table.data-table th {
+    position: sticky;
+    top: 0;
+    background: var(--surface-1);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  table.data-table td.glyph {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  table.data-table td.num {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+  }
+</style>
+
+<div class="viz-root">
+  <div class="wrap">
+    <header class="page-head">
+      <p class="eyebrow">toy-llm &middot; run 20260805_145518_221484</p>
+      <h1>Token embeddings, projected to 2D, across five checkpoints</h1>
+      <p class="dek">
+        Same PCA treatment applied to the 65&times;64 token embedding matrix at
+        steps 0, 2000, 4000, 6000 and 8000. Each checkpoint refits its own PCA
+        basis, so absolute orientation isn't comparable step-to-step &mdash;
+        what's worth reading is <em>whether structure exists at all</em>, and
+        which tokens sit near which. Hover any point for its character.
+      </p>
+    </header>
+
+    <div class="legend">
+      <span class="legend-label">Token class</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:var(--cat-whitespace)"></span>whitespace (<code>\n</code>, space)</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:var(--cat-punct)"></span>punctuation &amp; digit</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:var(--cat-letter)"></span>letter (upper + lower)</span>
+    </div>
+
+    <div class="grid" id="panel-grid"></div>
+
+    <div class="analysis">
+      <div class="note">
+        <h3>Step 0 &rarr; no structure</h3>
+        <p>At initialization every point sits in a tight blob within
+        &plusmn;0.09 of the origin &mdash; random init, no learned relationships
+        yet. There's no separation by token class because nothing has been
+        learned.</p>
+      </div>
+      <div class="note">
+        <h3>Step 2000 &rarr; case split emerges fast</h3>
+        <p>By the first checkpoint, uppercase letters (<code>A</code>&ndash;<code>Z</code>)
+        have moved to the left half of the plot and lowercase letters
+        (<code>a</code>&ndash;<code>z</code>) to the right, with whitespace
+        sitting among the lowercase cluster. This is the single biggest
+        structural change in the whole run, and it's mostly in place after
+        just 2000 steps.</p>
+      </div>
+      <div class="note">
+        <h3>Steps 4000&ndash;8000 &rarr; the split sharpens, doesn't reorganize</h3>
+        <p>The uppercase/lowercase axis persists essentially unchanged through
+        the rest of training; what changes is magnitude &mdash; points drift
+        further from the origin (e.g. <code>$</code> and <code>&amp;</code>
+        push out to the far left-top), meaning the model is sharpening
+        distinctions it already found rather than discovering new ones.</p>
+      </div>
+      <div class="note">
+        <h3>Punctuation stays loosely clustered</h3>
+        <p>Punctuation and the lone digit <code>3</code> occupy a diffuse band
+        between the two letter-case clusters throughout training &mdash; expected,
+        since a 108K-param model over ~8K steps only has so much capacity to
+        carve out fine-grained structure beyond the dominant case signal.</p>
+      </div>
+    </div>
+
+    <details class="table-view">
+      <summary>View underlying data as a table</summary>
+      <div class="table-scroll">
+        <table class="data-table" id="data-table">
+          <thead>
+            <tr><th>Step</th><th>Token</th><th>Class</th><th>PC1</th><th>PC2</th></tr>
+          </thead>
+          <tbody id="data-table-body"></tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+</div>
+
+<div id="tooltip" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  const DATA = {"0": [{"tok": "\n", "cat": "whitespace", "x": 0.008925067260861397, "y": -0.042895056307315826}, {"tok": " ", "cat": "whitespace", "x": -0.07647448033094406, "y": 0.0018821228295564651}, {"tok": "!", "cat": "punctuation", "x": -0.017041826620697975, "y": 0.009565444663167}, {"tok": "$", "cat": "punctuation", "x": -0.04753376543521881, "y": -0.06655899435281754}, {"tok": "&", "cat": "punctuation", "x": -0.008100832812488079, "y": 0.05959869176149368}, {"tok": "'", "cat": "punctuation", "x": 0.03539836406707764, "y": 0.011793706566095352}, {"tok": ",", "cat": "punctuation", "x": 0.030703410506248474, "y": -0.006851058453321457}, {"tok": "-", "cat": "punctuation", "x": -0.018225498497486115, "y": 0.029059333726763725}, {"tok": ".", "cat": "punctuation", "x": 0.02368498593568802, "y": 0.029900409281253815}, {"tok": "3", "cat": "punctuation", "x": 0.03293466195464134, "y": -0.036644406616687775}, {"tok": ":", "cat": "punctuation", "x": -0.04496978223323822, "y": 0.08019263297319412}, {"tok": ";", "cat": "punctuation", "x": -0.0011023820843547583, "y": -0.03294973820447922}, {"tok": "?", "cat": "punctuation", "x": 0.01628805883228779, "y": -0.023093391209840775}, {"tok": "A", "cat": "letter", "x": 0.03192839026451111, "y": -0.05063600093126297}, {"tok": "B", "cat": "letter", "x": 0.09721492230892181, "y": 0.027020368725061417}, {"tok": "C", "cat": "letter", "x": 0.005020064767450094, "y": 0.017107214778661728}, {"tok": "D", "cat": "letter", "x": 0.029979661107063293, "y": -0.02083597332239151}, {"tok": "E", "cat": "letter", "x": -0.07766804099082947, "y": -0.04334434121847153}, {"tok": "F", "cat": "letter", "x": 0.04176052287220955, "y": -0.04015792906284332}, {"tok": "G", "cat": "letter", "x": -0.009657921269536018, "y": -0.009189329110085964}, {"tok": "H", "cat": "letter", "x": 0.06283709406852722, "y": -0.00016934331506490707}, {"tok": "I", "cat": "letter", "x": -0.00961069855839014, "y": -0.004574101883918047}, {"tok": "J", "cat": "letter", "x": 0.06575214117765427, "y": 0.03511257469654083}, {"tok": "K", "cat": "letter", "x": 0.024516699835658073, "y": -0.014149388298392296}, {"tok": "L", "cat": "letter", "x": -0.006917769089341164, "y": -0.0034795054234564304}, {"tok": "M", "cat": "letter", "x": -0.07222713530063629, "y": 0.02071218565106392}, {"tok": "N", "cat": "letter", "x": -0.05973434075713158, "y": -0.03568475693464279}, {"tok": "O", "cat": "letter", "x": -0.023468226194381714, "y": 0.027251029387116432}, {"tok": "P", "cat": "letter", "x": 0.03574968874454498, "y": -0.012490141205489635}, {"tok": "Q", "cat": "letter", "x": 0.015455399639904499, "y": 0.010982723906636238}, {"tok": "R", "cat": "letter", "x": 0.011357516050338745, "y": 0.02475186437368393}, {"tok": "S", "cat": "letter", "x": -0.035965465009212494, "y": 0.05561768263578415}, {"tok": "T", "cat": "letter", "x": 0.042689692229032516, "y": 0.03294064477086067}, {"tok": "U", "cat": "letter", "x": -0.0033184634521603584, "y": 0.05960739403963089}, {"tok": "V", "cat": "letter", "x": 0.010080244392156601, "y": -0.029203902930021286}, {"tok": "W", "cat": "letter", "x": -0.0011377446353435516, "y": 0.004984496161341667}, {"tok": "X", "cat": "letter", "x": -0.051407307386398315, "y": 0.033577144145965576}, {"tok": "Y", "cat": "letter", "x": 0.04285035282373428, "y": -0.009487920440733433}, {"tok": "Z", "cat": "letter", "x": 0.013748964294791222, "y": -0.0491870641708374}, {"tok": "a", "cat": "letter", "x": -0.002250179648399353, "y": -0.0007929261773824692}, {"tok": "b", "cat": "letter", "x": 0.010163497179746628, "y": -0.036306291818618774}, {"tok": "c", "cat": "letter", "x": -0.017537914216518402, "y": -0.020740708336234093}, {"tok": "d", "cat": "letter", "x": 0.01948605477809906, "y": 0.023821968585252762}, {"tok": "e", "cat": "letter", "x": -0.029210492968559265, "y": -0.038037557154893875}, {"tok": "f", "cat": "letter", "x": 0.014213306829333305, "y": 0.018229352310299873}, {"tok": "g", "cat": "letter", "x": 0.009894516319036484, "y": -0.06065735965967178}, {"tok": "h", "cat": "letter", "x": -0.028489045798778534, "y": 0.023657305166125298}, {"tok": "i", "cat": "letter", "x": 0.04471389204263687, "y": 0.0062940120697021484}, {"tok": "j", "cat": "letter", "x": 0.012042172253131866, "y": -0.05211848020553589}, {"tok": "k", "cat": "letter", "x": 0.00874374434351921, "y": 0.00626622186973691}, {"tok": "l", "cat": "letter", "x": -0.0494944304227829, "y": -0.010784625075757504}, {"tok": "m", "cat": "letter", "x": -0.05364011228084564, "y": -0.031461309641599655}, {"tok": "n", "cat": "letter", "x": -0.0078264269977808, "y": -0.007994049228727818}, {"tok": "o", "cat": "letter", "x": -0.04231523722410202, "y": -0.00135740265250206}, {"tok": "p", "cat": "letter", "x": -0.033740315586328506, "y": -0.005893563851714134}, {"tok": "q", "cat": "letter", "x": -0.026460742577910423, "y": 0.08931151032447815}, {"tok": "r", "cat": "letter", "x": 0.029959041625261307, "y": 0.03034050390124321}, {"tok": "s", "cat": "letter", "x": 0.04170519486069679, "y": -0.003406697418540716}, {"tok": "t", "cat": "letter", "x": 0.011340191587805748, "y": 0.0210819561034441}, {"tok": "u", "cat": "letter", "x": -0.06585542857646942, "y": 0.0008694147691130638}, {"tok": "v", "cat": "letter", "x": 0.019148729741573334, "y": 0.006985324434936047}, {"tok": "w", "cat": "letter", "x": -0.014992994256317616, "y": 0.02027302421629429}, {"tok": "x", "cat": "letter", "x": -0.03789408504962921, "y": -0.023518208414316177}, {"tok": "y", "cat": "letter", "x": 0.06149821728467941, "y": -0.009773701429367065}, {"tok": "z", "cat": "letter", "x": 0.012484668754041195, "y": 0.015636960044503212}], "2000": [{"tok": "\n", "cat": "whitespace", "x": 0.14910182356834412, "y": 0.015413738787174225}, {"tok": " ", "cat": "whitespace", "x": 0.5629130005836487, "y": 0.028077788650989532}, {"tok": "!", "cat": "punctuation", "x": 0.030300842598080635, "y": 0.3339737057685852}, {"tok": "$", "cat": "punctuation", "x": -0.3761749863624573, "y": 0.40851208567619324}, {"tok": "&", "cat": "punctuation", "x": -0.3502520024776459, "y": 0.3672770857810974}, {"tok": "'", "cat": "punctuation", "x": 0.21513423323631287, "y": 0.0749012678861618}, {"tok": ",", "cat": "punctuation", "x": 0.2940700650215149, "y": 0.2842113673686981}, {"tok": "-", "cat": "punctuation", "x": 0.01123634073883295, "y": 0.3372601270675659}, {"tok": ".", "cat": "punctuation", "x": 0.16932295262813568, "y": 0.2997279763221741}, {"tok": "3", "cat": "punctuation", "x": -0.3587959408760071, "y": 0.345172643661499}, {"tok": ":", "cat": "punctuation", "x": -0.011087045073509216, "y": -0.07016400247812271}, {"tok": ";", "cat": "punctuation", "x": 0.09844432771205902, "y": 0.34908759593963623}, {"tok": "?", "cat": "punctuation", "x": 0.05196189880371094, "y": 0.34306395053863525}, {"tok": "A", "cat": "letter", "x": -0.26301345229148865, "y": -0.3924780488014221}, {"tok": "B", "cat": "letter", "x": -0.3052581548690796, "y": -0.1488133668899536}, {"tok": "C", "cat": "letter", "x": -0.35552963614463806, "y": -0.23192384839057922}, {"tok": "D", "cat": "letter", "x": -0.3752102553844452, "y": -0.0681975856423378}, {"tok": "E", "cat": "letter", "x": -0.3154696524143219, "y": -0.37415608763694763}, {"tok": "F", "cat": "letter", "x": -0.3171839714050293, "y": -0.04645705968141556}, {"tok": "G", "cat": "letter", "x": -0.2754325568675995, "y": -0.15522463619709015}, {"tok": "H", "cat": "letter", "x": -0.30580228567123413, "y": -0.234197735786438}, {"tok": "I", "cat": "letter", "x": -0.15868490934371948, "y": -0.48788654804229736}, {"tok": "J", "cat": "letter", "x": -0.3791747987270355, "y": 0.19361403584480286}, {"tok": "K", "cat": "letter", "x": -0.4235547184944153, "y": -0.10375714302062988}, {"tok": "L", "cat": "letter", "x": -0.3437530994415283, "y": -0.29093998670578003}, {"tok": "M", "cat": "letter", "x": -0.3468979001045227, "y": -0.1455259472131729}, {"tok": "N", "cat": "letter", "x": -0.37253206968307495, "y": -0.14928117394447327}, {"tok": "O", "cat": "letter", "x": -0.2828652560710907, "y": -0.3895469605922699}, {"tok": "P", "cat": "letter", "x": -0.34561535716056824, "y": -0.01297933328896761}, {"tok": "Q", "cat": "letter", "x": -0.42117840051651, "y": 0.3139680027961731}, {"tok": "R", "cat": "letter", "x": -0.2704043984413147, "y": -0.2801181972026825}, {"tok": "S", "cat": "letter", "x": -0.33651262521743774, "y": -0.21186839044094086}, {"tok": "T", "cat": "letter", "x": -0.2730262875556946, "y": -0.301202654838562}, {"tok": "U", "cat": "letter", "x": -0.3916919231414795, "y": -0.17042484879493713}, {"tok": "V", "cat": "letter", "x": -0.36846646666526794, "y": 0.015230216085910797}, {"tok": "W", "cat": "letter", "x": -0.277212530374527, "y": -0.1630699634552002}, {"tok": "X", "cat": "letter", "x": -0.4089181125164032, "y": 0.2813068628311157}, {"tok": "Y", "cat": "letter", "x": -0.32550859451293945, "y": -0.14919590950012207}, {"tok": "Z", "cat": "letter", "x": -0.45378732681274414, "y": 0.2850084900856018}, {"tok": "a", "cat": "letter", "x": 0.5083303451538086, "y": -0.2524781823158264}, {"tok": "b", "cat": "letter", "x": 0.21036368608474731, "y": 0.07055641710758209}, {"tok": "c", "cat": "letter", "x": 0.3611356019973755, "y": 0.07516457885503769}, {"tok": "d", "cat": "letter", "x": 0.38053303956985474, "y": 0.07847349345684052}, {"tok": "e", "cat": "letter", "x": 0.63204026222229, "y": -0.14442874491214752}, {"tok": "f", "cat": "letter", "x": 0.30492502450942993, "y": 0.026373252272605896}, {"tok": "g", "cat": "letter", "x": 0.2497335523366928, "y": 0.12409929931163788}, {"tok": "h", "cat": "letter", "x": 0.3324791193008423, "y": -0.18939249217510223}, {"tok": "i", "cat": "letter", "x": 0.5369720458984375, "y": -0.1802310049533844}, {"tok": "j", "cat": "letter", "x": -0.12597131729125977, "y": 0.2156629115343094}, {"tok": "k", "cat": "letter", "x": 0.23535573482513428, "y": 0.12656909227371216}, {"tok": "l", "cat": "letter", "x": 0.50658118724823, "y": -0.0534810796380043}, {"tok": "m", "cat": "letter", "x": 0.3667221665382385, "y": 0.02653510496020317}, {"tok": "n", "cat": "letter", "x": 0.4630172848701477, "y": 0.006298677064478397}, {"tok": "o", "cat": "letter", "x": 0.52536541223526, "y": -0.2894827425479889}, {"tok": "p", "cat": "letter", "x": 0.27588337659835815, "y": 0.06649310141801834}, {"tok": "q", "cat": "letter", "x": -0.144900843501091, "y": 0.21866512298583984}, {"tok": "r", "cat": "letter", "x": 0.5476053953170776, "y": -0.055250898003578186}, {"tok": "s", "cat": "letter", "x": 0.5322905778884888, "y": -0.03302931413054466}, {"tok": "t", "cat": "letter", "x": 0.5859926342964172, "y": -0.07857216894626617}, {"tok": "u", "cat": "letter", "x": 0.407417893409729, "y": -0.11967406421899796}, {"tok": "v", "cat": "letter", "x": 0.16460098326206207, "y": 0.16602632403373718}, {"tok": "w", "cat": "letter", "x": 0.2890363931655884, "y": -0.06418895721435547}, {"tok": "x", "cat": "letter", "x": -0.1573558896780014, "y": 0.2913273870944977}, {"tok": "y", "cat": "letter", "x": 0.40638867020606995, "y": -0.0587586872279644}, {"tok": "z", "cat": "letter", "x": -0.18803299963474274, "y": 0.3283260464668274}], "4000": [{"tok": "\n", "cat": "whitespace", "x": 0.18829424679279327, "y": -0.14847175776958466}, {"tok": " ", "cat": "whitespace", "x": 0.5752537250518799, "y": -0.216620072722435}, {"tok": "!", "cat": "punctuation", "x": 0.06424246728420258, "y": 0.1853969395160675}, {"tok": "$", "cat": "punctuation", "x": -0.48666101694107056, "y": 0.4975120723247528}, {"tok": "&", "cat": "punctuation", "x": -0.45537376403808594, "y": 0.44741201400756836}, {"tok": "'", "cat": "punctuation", "x": 0.30228838324546814, "y": -0.04571717977523804}, {"tok": ",", "cat": "punctuation", "x": 0.3493644595146179, "y": 0.04053981229662895}, {"tok": "-", "cat": "punctuation", "x": 0.05728106200695038, "y": 0.1996549367904663}, {"tok": ".", "cat": "punctuation", "x": 0.1928206831216812, "y": 0.1028534546494484}, {"tok": "3", "cat": "punctuation", "x": -0.41499409079551697, "y": 0.329784095287323}, {"tok": ":", "cat": "punctuation", "x": 0.026532620191574097, "y": -0.38407114148139954}, {"tok": ";", "cat": "punctuation", "x": 0.12901359796524048, "y": 0.09784989058971405}, {"tok": "?", "cat": "punctuation", "x": 0.05486147105693817, "y": 0.18287067115306854}, {"tok": "A", "cat": "letter", "x": -0.2836199998855591, "y": -0.47196123003959656}, {"tok": "B", "cat": "letter", "x": -0.3172656297683716, "y": -0.12909385561943054}, {"tok": "C", "cat": "letter", "x": -0.365054726600647, "y": -0.16562041640281677}, {"tok": "D", "cat": "letter", "x": -0.3287687301635742, "y": -0.12405278533697128}, {"tok": "E", "cat": "letter", "x": -0.2594028115272522, "y": -0.43360888957977295}, {"tok": "F", "cat": "letter", "x": -0.327551007270813, "y": -0.09266127645969391}, {"tok": "G", "cat": "letter", "x": -0.32005012035369873, "y": -0.12649305164813995}, {"tok": "H", "cat": "letter", "x": -0.3024712800979614, "y": -0.22099202871322632}, {"tok": "I", "cat": "letter", "x": -0.11250349879264832, "y": -0.5320340991020203}, {"tok": "J", "cat": "letter", "x": -0.4153631329536438, "y": 0.29401832818984985}, {"tok": "K", "cat": "letter", "x": -0.40487319231033325, "y": -0.08729623258113861}, {"tok": "L", "cat": "letter", "x": -0.2890275716781616, "y": -0.331133633852005}, {"tok": "M", "cat": "letter", "x": -0.3784848153591156, "y": -0.11297769844532013}, {"tok": "N", "cat": "letter", "x": -0.3567170202732086, "y": -0.2608243227005005}, {"tok": "O", "cat": "letter", "x": -0.3217001259326935, "y": -0.5077639818191528}, {"tok": "P", "cat": "letter", "x": -0.4087156653404236, "y": 0.03984839469194412}, {"tok": "Q", "cat": "letter", "x": -0.4691479504108429, "y": 0.3587251901626587}, {"tok": "R", "cat": "letter", "x": -0.23320046067237854, "y": -0.299331396818161}, {"tok": "S", "cat": "letter", "x": -0.2865508198738098, "y": -0.19750018417835236}, {"tok": "T", "cat": "letter", "x": -0.2930416166782379, "y": -0.3141498863697052}, {"tok": "U", "cat": "letter", "x": -0.42751431465148926, "y": -0.3501797914505005}, {"tok": "V", "cat": "letter", "x": -0.48735618591308594, "y": 0.07675676047801971}, {"tok": "W", "cat": "letter", "x": -0.28069597482681274, "y": -0.17244255542755127}, {"tok": "X", "cat": "letter", "x": -0.4962577521800995, "y": 0.26537010073661804}, {"tok": "Y", "cat": "letter", "x": -0.37836551666259766, "y": -0.2454186975955963}, {"tok": "Z", "cat": "letter", "x": -0.526890754699707, "y": 0.28457871079444885}, {"tok": "a", "cat": "letter", "x": 0.5026463270187378, "y": -0.23070265352725983}, {"tok": "b", "cat": "letter", "x": 0.2456427961587906, "y": 0.24734759330749512}, {"tok": "c", "cat": "letter", "x": 0.3831137418746948, "y": 0.2301105409860611}, {"tok": "d", "cat": "letter", "x": 0.40902549028396606, "y": 0.16075798869132996}, {"tok": "e", "cat": "letter", "x": 0.6216471791267395, "y": -0.22819198668003082}, {"tok": "f", "cat": "letter", "x": 0.30576789379119873, "y": 0.17532625794410706}, {"tok": "g", "cat": "letter", "x": 0.2915881872177124, "y": 0.2088557630777359}, {"tok": "h", "cat": "letter", "x": 0.31136152148246765, "y": -0.1713409423828125}, {"tok": "i", "cat": "letter", "x": 0.5490413904190063, "y": -0.198880136013031}, {"tok": "j", "cat": "letter", "x": -0.12572431564331055, "y": 0.3884708881378174}, {"tok": "k", "cat": "letter", "x": 0.21657857298851013, "y": 0.2727052867412567}, {"tok": "l", "cat": "letter", "x": 0.5205601453781128, "y": 0.03337215632200241}, {"tok": "m", "cat": "letter", "x": 0.4115760028362274, "y": 0.158543199300766}, {"tok": "n", "cat": "letter", "x": 0.5234600305557251, "y": 0.08203031122684479}, {"tok": "o", "cat": "letter", "x": 0.48389995098114014, "y": -0.3039866089820862}, {"tok": "p", "cat": "letter", "x": 0.30529409646987915, "y": 0.2652737498283386}, {"tok": "q", "cat": "letter", "x": -0.10997197031974792, "y": 0.41555142402648926}, {"tok": "r", "cat": "letter", "x": 0.5649758577346802, "y": -0.0154592115432024}, {"tok": "s", "cat": "letter", "x": 0.6116708517074585, "y": 0.012853967025876045}, {"tok": "t", "cat": "letter", "x": 0.6208862662315369, "y": 0.04092227295041084}, {"tok": "u", "cat": "letter", "x": 0.39146214723587036, "y": -0.15536299347877502}, {"tok": "v", "cat": "letter", "x": 0.13244588673114777, "y": 0.3461025655269623}, {"tok": "w", "cat": "letter", "x": 0.32151228189468384, "y": 0.04101233556866646}, {"tok": "x", "cat": "letter", "x": -0.17234984040260315, "y": 0.37851881980895996}, {"tok": "y", "cat": "letter", "x": 0.37646645307540894, "y": -0.04373081028461456}, {"tok": "z", "cat": "letter", "x": -0.2049100399017334, "y": 0.4571450352668762}], "6000": [{"tok": "\n", "cat": "whitespace", "x": 0.12492256611585617, "y": -0.24386796355247498}, {"tok": " ", "cat": "whitespace", "x": 0.4190031886100769, "y": -0.1714591085910797}, {"tok": "!", "cat": "punctuation", "x": 0.12940764427185059, "y": -0.5680990815162659}, {"tok": "$", "cat": "punctuation", "x": -0.2984401285648346, "y": -0.5559331178665161}, {"tok": "&", "cat": "punctuation", "x": -0.25621140003204346, "y": -0.4244624376296997}, {"tok": "'", "cat": "punctuation", "x": 0.26445889472961426, "y": -0.14518673717975616}, {"tok": ",", "cat": "punctuation", "x": 0.3333275020122528, "y": -0.4576389789581299}, {"tok": "-", "cat": "punctuation", "x": 0.13865020871162415, "y": -0.44235169887542725}, {"tok": ".", "cat": "punctuation", "x": 0.21974626183509827, "y": -0.5431720614433289}, {"tok": "3", "cat": "punctuation", "x": -0.2647101879119873, "y": -0.464506596326828}, {"tok": ":", "cat": "punctuation", "x": -0.11051899939775467, "y": -0.32127609848976135}, {"tok": ";", "cat": "punctuation", "x": 0.16522011160850525, "y": -0.5205034613609314}, {"tok": "?", "cat": "punctuation", "x": 0.11734019219875336, "y": -0.6083128452301025}, {"tok": "A", "cat": "letter", "x": -0.30114877223968506, "y": 0.2715095281600952}, {"tok": "B", "cat": "letter", "x": -0.3807221055030823, "y": 0.10907121002674103}, {"tok": "C", "cat": "letter", "x": -0.42676299810409546, "y": 0.22469621896743774}, {"tok": "D", "cat": "letter", "x": -0.4303550124168396, "y": 0.02073078788816929}, {"tok": "E", "cat": "letter", "x": -0.31031447649002075, "y": 0.22887669503688812}, {"tok": "F", "cat": "letter", "x": -0.39413338899612427, "y": 0.06604249775409698}, {"tok": "G", "cat": "letter", "x": -0.3698933720588684, "y": 0.10401133447885513}, {"tok": "H", "cat": "letter", "x": -0.3330623209476471, "y": 0.1641889065504074}, {"tok": "I", "cat": "letter", "x": -0.19809642434120178, "y": 0.27084270119667053}, {"tok": "J", "cat": "letter", "x": -0.2650524973869324, "y": -0.06842435151338577}, {"tok": "K", "cat": "letter", "x": -0.3342379331588745, "y": 0.12356541305780411}, {"tok": "L", "cat": "letter", "x": -0.3669740855693817, "y": 0.2978114187717438}, {"tok": "M", "cat": "letter", "x": -0.46529269218444824, "y": 0.1963905394077301}, {"tok": "N", "cat": "letter", "x": -0.4426543116569519, "y": 0.11511120200157166}, {"tok": "O", "cat": "letter", "x": -0.36826685070991516, "y": 0.257027804851532}, {"tok": "P", "cat": "letter", "x": -0.3934042155742645, "y": 0.10345862805843353}, {"tok": "Q", "cat": "letter", "x": -0.3159728944301605, "y": -0.24232299625873566}, {"tok": "R", "cat": "letter", "x": -0.3459213674068451, "y": 0.3055252730846405}, {"tok": "S", "cat": "letter", "x": -0.4513784646987915, "y": 0.08195029944181442}, {"tok": "T", "cat": "letter", "x": -0.42724519968032837, "y": 0.20059004426002502}, {"tok": "U", "cat": "letter", "x": -0.3902265429496765, "y": 0.14084601402282715}, {"tok": "V", "cat": "letter", "x": -0.427687406539917, "y": -0.030247315764427185}, {"tok": "W", "cat": "letter", "x": -0.3381282389163971, "y": 0.12837761640548706}, {"tok": "X", "cat": "letter", "x": -0.3855746388435364, "y": -0.3220108151435852}, {"tok": "Y", "cat": "letter", "x": -0.42895567417144775, "y": 0.09667187184095383}, {"tok": "Z", "cat": "letter", "x": -0.2917308211326599, "y": -0.2746085822582245}, {"tok": "a", "cat": "letter", "x": 0.505524754524231, "y": 0.2872861921787262}, {"tok": "b", "cat": "letter", "x": 0.2849155366420746, "y": 0.030642926692962646}, {"tok": "c", "cat": "letter", "x": 0.38536950945854187, "y": 0.15742801129817963}, {"tok": "d", "cat": "letter", "x": 0.3220032751560211, "y": 0.05507085472345352}, {"tok": "e", "cat": "letter", "x": 0.6356827020645142, "y": 0.18884113430976868}, {"tok": "f", "cat": "letter", "x": 0.2731097936630249, "y": 0.07802146673202515}, {"tok": "g", "cat": "letter", "x": 0.2751880884170532, "y": 0.05866018682718277}, {"tok": "h", "cat": "letter", "x": 0.28722184896469116, "y": 0.18662096560001373}, {"tok": "i", "cat": "letter", "x": 0.5693359971046448, "y": 0.2433074414730072}, {"tok": "j", "cat": "letter", "x": -0.025874508544802666, "y": -0.09916889667510986}, {"tok": "k", "cat": "letter", "x": 0.2636643648147583, "y": 0.03945689648389816}, {"tok": "l", "cat": "letter", "x": 0.4856962561607361, "y": 0.26192426681518555}, {"tok": "m", "cat": "letter", "x": 0.37089237570762634, "y": 0.16219329833984375}, {"tok": "n", "cat": "letter", "x": 0.44984233379364014, "y": 0.17600372433662415}, {"tok": "o", "cat": "letter", "x": 0.4585723280906677, "y": 0.3011503219604492}, {"tok": "p", "cat": "letter", "x": 0.30749762058258057, "y": 0.13633456826210022}, {"tok": "q", "cat": "letter", "x": 0.02031978964805603, "y": -0.18775184452533722}, {"tok": "r", "cat": "letter", "x": 0.5297189354896545, "y": 0.23910290002822876}, {"tok": "s", "cat": "letter", "x": 0.4993038773536682, "y": 0.11300027370452881}, {"tok": "t", "cat": "letter", "x": 0.5229023694992065, "y": 0.20317673683166504}, {"tok": "u", "cat": "letter", "x": 0.40960657596588135, "y": 0.24571117758750916}, {"tok": "v", "cat": "letter", "x": 0.18656189739704132, "y": 0.07070963084697723}, {"tok": "w", "cat": "letter", "x": 0.28248316049575806, "y": 0.1840241402387619}, {"tok": "x", "cat": "letter", "x": -0.03018907457590103, "y": -0.19753150641918182}, {"tok": "y", "cat": "letter", "x": 0.37891319394111633, "y": 0.15407463908195496}, {"tok": "z", "cat": "letter", "x": -0.04726599156856537, "y": -0.19120116531848907}], "8000": [{"tok": "\n", "cat": "whitespace", "x": 0.2131219208240509, "y": -0.051876217126846313}, {"tok": " ", "cat": "whitespace", "x": 0.5649338364601135, "y": -0.13307443261146545}, {"tok": "!", "cat": "punctuation", "x": 0.11331076174974442, "y": 0.19342653453350067}, {"tok": "$", "cat": "punctuation", "x": -0.6471377611160278, "y": 0.6091783046722412}, {"tok": "&", "cat": "punctuation", "x": -0.5481950044631958, "y": 0.459908127784729}, {"tok": "'", "cat": "punctuation", "x": 0.32893288135528564, "y": -0.01950020343065262}, {"tok": ",", "cat": "punctuation", "x": 0.3840370774269104, "y": 0.08766056597232819}, {"tok": "-", "cat": "punctuation", "x": 0.08919019252061844, "y": 0.27455565333366394}, {"tok": ".", "cat": "punctuation", "x": 0.20266678929328918, "y": 0.14813125133514404}, {"tok": "3", "cat": "punctuation", "x": -0.45016396045684814, "y": 0.22601667046546936}, {"tok": ":", "cat": "punctuation", "x": 0.0920577347278595, "y": -0.35577887296676636}, {"tok": ";", "cat": "punctuation", "x": 0.14926986396312714, "y": 0.14100702106952667}, {"tok": "?", "cat": "punctuation", "x": 0.0766812264919281, "y": 0.23647592961788177}, {"tok": "A", "cat": "letter", "x": -0.24867188930511475, "y": -0.4836048185825348}, {"tok": "B", "cat": "letter", "x": -0.3263174593448639, "y": -0.1435871124267578}, {"tok": "C", "cat": "letter", "x": -0.29955077171325684, "y": -0.13461801409721375}, {"tok": "D", "cat": "letter", "x": -0.30947500467300415, "y": -0.10721774399280548}, {"tok": "E", "cat": "letter", "x": -0.19866052269935608, "y": -0.45839953422546387}, {"tok": "F", "cat": "letter", "x": -0.3266213536262512, "y": -0.09348984807729721}, {"tok": "G", "cat": "letter", "x": -0.32462430000305176, "y": -0.11940991878509521}, {"tok": "H", "cat": "letter", "x": -0.2859163284301758, "y": -0.30525314807891846}, {"tok": "I", "cat": "letter", "x": -0.06477304548025131, "y": -0.4529237449169159}, {"tok": "J", "cat": "letter", "x": -0.4225934147834778, "y": 0.24680140614509583}, {"tok": "K", "cat": "letter", "x": -0.3433012068271637, "y": -0.08232630044221878}, {"tok": "L", "cat": "letter", "x": -0.16372962296009064, "y": -0.4244347810745239}, {"tok": "M", "cat": "letter", "x": -0.3669671416282654, "y": -0.18080325424671173}, {"tok": "N", "cat": "letter", "x": -0.2658824622631073, "y": -0.34469538927078247}, {"tok": "O", "cat": "letter", "x": -0.2683683931827545, "y": -0.4866112172603607}, {"tok": "P", "cat": "letter", "x": -0.42334359884262085, "y": -0.037112463265657425}, {"tok": "Q", "cat": "letter", "x": -0.49372413754463196, "y": 0.3459268808364868}, {"tok": "R", "cat": "letter", "x": -0.21314798295497894, "y": -0.38393914699554443}, {"tok": "S", "cat": "letter", "x": -0.2603074014186859, "y": -0.23893597722053528}, {"tok": "T", "cat": "letter", "x": -0.25551554560661316, "y": -0.3304201662540436}, {"tok": "U", "cat": "letter", "x": -0.37420305609703064, "y": -0.3591510057449341}, {"tok": "V", "cat": "letter", "x": -0.4439629912376404, "y": 0.1279139518737793}, {"tok": "W", "cat": "letter", "x": -0.3282938599586487, "y": -0.1924390345811844}, {"tok": "X", "cat": "letter", "x": -0.4999128580093384, "y": 0.20661595463752747}, {"tok": "Y", "cat": "letter", "x": -0.38649797439575195, "y": -0.32150131464004517}, {"tok": "Z", "cat": "letter", "x": -0.5091561675071716, "y": 0.27445751428604126}, {"tok": "a", "cat": "letter", "x": 0.4651868939399719, "y": -0.16550061106681824}, {"tok": "b", "cat": "letter", "x": 0.21382080018520355, "y": 0.29390978813171387}, {"tok": "c", "cat": "letter", "x": 0.33910807967185974, "y": 0.2185085117816925}, {"tok": "d", "cat": "letter", "x": 0.4224082827568054, "y": 0.15360450744628906}, {"tok": "e", "cat": "letter", "x": 0.5844637155532837, "y": -0.17417973279953003}, {"tok": "f", "cat": "letter", "x": 0.28320151567459106, "y": 0.26968228816986084}, {"tok": "g", "cat": "letter", "x": 0.2618992328643799, "y": 0.19295260310173035}, {"tok": "h", "cat": "letter", "x": 0.26760560274124146, "y": -0.14955350756645203}, {"tok": "i", "cat": "letter", "x": 0.507694661617279, "y": -0.1773117482662201}, {"tok": "j", "cat": "letter", "x": -0.180190309882164, "y": 0.3857588768005371}, {"tok": "k", "cat": "letter", "x": 0.152889221906662, "y": 0.2286994308233261}, {"tok": "l", "cat": "letter", "x": 0.5269395709037781, "y": -0.006375622004270554}, {"tok": "m", "cat": "letter", "x": 0.3846227526664734, "y": 0.1448565125465393}, {"tok": "n", "cat": "letter", "x": 0.5361371636390686, "y": 0.06263798475265503}, {"tok": "o", "cat": "letter", "x": 0.4446862041950226, "y": -0.25186359882354736}, {"tok": "p", "cat": "letter", "x": 0.24909885227680206, "y": 0.277234822511673}, {"tok": "q", "cat": "letter", "x": -0.1239701583981514, "y": 0.5070703625679016}, {"tok": "r", "cat": "letter", "x": 0.5486688017845154, "y": -0.07649160176515579}, {"tok": "s", "cat": "letter", "x": 0.62148118019104, "y": 0.037170808762311935}, {"tok": "t", "cat": "letter", "x": 0.5964708924293518, "y": 0.07897011935710907}, {"tok": "u", "cat": "letter", "x": 0.35278069972991943, "y": -0.1694190800189972}, {"tok": "v", "cat": "letter", "x": 0.1577182561159134, "y": 0.27641060948371887}, {"tok": "w", "cat": "letter", "x": 0.27417635917663574, "y": 0.019532453268766403}, {"tok": "x", "cat": "letter", "x": -0.1532631814479828, "y": 0.3788095712661743}, {"tok": "y", "cat": "letter", "x": 0.31331583857536316, "y": -0.09430805593729019}, {"tok": "z", "cat": "letter", "x": -0.21213805675506592, "y": 0.4022226333618164}]};
+  const STEPS = ["0", "2000", "4000", "6000", "8000"];
+  const CAT_VAR = {
+    whitespace: "--cat-whitespace",
+    punctuation: "--cat-punct",
+    letter: "--cat-letter"
+  };
+  const CAT_LABEL = {
+    whitespace: "whitespace",
+    punctuation: "punctuation",
+    letter: "letter"
+  };
+
+  // shared domain across all panels so the size of the spread is comparable
+  const DOMAIN = 0.72;
+  const SIZE = 240;
+  const PAD = 8;
+  const PLOT = SIZE - PAD * 2;
+
+  function sx(x) { return PAD + ((x + DOMAIN) / (2 * DOMAIN)) * PLOT; }
+  function sy(y) { return PAD + ((DOMAIN - y) / (2 * DOMAIN)) * PLOT; }
+
+  function svgEl(tag, attrs) {
+    const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  const grid = document.getElementById("panel-grid");
+  const tooltip = document.getElementById("tooltip");
+  const tableBody = document.getElementById("data-table-body");
+
+  STEPS.forEach(function (step) {
+    const points = DATA[step];
+
+    const panel = document.createElement("div");
+    panel.className = "panel";
+
+    const head = document.createElement("div");
+    head.className = "panel-head";
+    const stepLabel = document.createElement("span");
+    stepLabel.className = "panel-step";
+    stepLabel.textContent = "step " + step;
+    const unit = document.createElement("span");
+    unit.className = "unit";
+    unit.textContent = "n=" + points.length;
+    stepLabel.appendChild(unit);
+    head.appendChild(stepLabel);
+    panel.appendChild(head);
+
+    const svg = svgEl("svg", {
+      viewBox: "0 0 " + SIZE + " " + SIZE,
+      "aria-label": "Embedding PCA scatter at step " + step
+    });
+
+    // gridlines at 0
+    svg.appendChild(svgEl("line", {
+      class: "grid-line", x1: sx(0), y1: PAD, x2: sx(0), y2: SIZE - PAD
+    }));
+    svg.appendChild(svgEl("line", {
+      class: "grid-line", x1: PAD, y1: sy(0), x2: SIZE - PAD, y2: sy(0)
+    }));
+    // border
+    svg.appendChild(svgEl("rect", {
+      x: PAD, y: PAD, width: PLOT, height: PLOT,
+      fill: "none", class: "axis-line"
+    }));
+
+    points.forEach(function (p) {
+      const cx = sx(p.x), cy = sy(p.y);
+      const colorVar = "var(" + CAT_VAR[p.cat] + ")";
+
+      const hit = svgEl("circle", {
+        class: "pt-hit", cx: cx, cy: cy, r: 12,
+        tabindex: "0", role: "img",
+        "aria-label": "token " + p.tok + ", " + CAT_LABEL[p.cat] +
+          ", PC1 " + p.x.toFixed(3) + ", PC2 " + p.y.toFixed(3)
+      });
+      const dot = svgEl("circle", {
+        class: "pt", cx: cx, cy: cy, r: 4, fill: colorVar
+      });
+
+      function show(evt) {
+        const glyphSpan = document.createElement("span");
+        glyphSpan.className = "tt-glyph";
+        glyphSpan.textContent = p.tok === "\n" ? "\\n" : (p.tok === " " ? "␣" : p.tok);
+        const catSpan = document.createElement("span");
+        catSpan.className = "tt-cat";
+        catSpan.textContent = CAT_LABEL[p.cat];
+        tooltip.replaceChildren(glyphSpan, catSpan);
+        tooltip.classList.add("visible");
+        const cx2 = evt.clientX !== undefined ? evt.clientX : hit.getBoundingClientRect().left;
+        const cy2 = evt.clientY !== undefined ? evt.clientY : hit.getBoundingClientRect().top;
+        tooltip.style.left = cx2 + "px";
+        tooltip.style.top = cy2 + "px";
+      }
+      function showAtEl() {
+        const r = hit.getBoundingClientRect();
+        show({ clientX: r.left + r.width / 2, clientY: r.top });
+      }
+      function hide() {
+        tooltip.classList.remove("visible");
+      }
+
+      hit.addEventListener("pointermove", show);
+      hit.addEventListener("pointerenter", show);
+      hit.addEventListener("pointerleave", hide);
+      hit.addEventListener("focus", showAtEl);
+      hit.addEventListener("blur", hide);
+
+      svg.appendChild(hit);
+      svg.appendChild(dot);
+
+      const tr = document.createElement("tr");
+      const tdStep = document.createElement("td");
+      tdStep.className = "num";
+      tdStep.textContent = step;
+      const tdTok = document.createElement("td");
+      tdTok.className = "glyph";
+      tdTok.textContent = p.tok === "\n" ? "\\n" : (p.tok === " " ? "␣ (space)" : p.tok);
+      const tdCat = document.createElement("td");
+      tdCat.textContent = CAT_LABEL[p.cat];
+      const tdX = document.createElement("td");
+      tdX.className = "num";
+      tdX.textContent = p.x.toFixed(4);
+      const tdY = document.createElement("td");
+      tdY.className = "num";
+      tdY.textContent = p.y.toFixed(4);
+      tr.append(tdStep, tdTok, tdCat, tdX, tdY);
+      tableBody.appendChild(tr);
+    });
+
+    panel.appendChild(svg);
+    grid.appendChild(panel);
+  });
+})();
+</script>
