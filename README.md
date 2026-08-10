@@ -106,6 +106,60 @@ python train.py --max-steps 10000 --log-every 250 --checkpoint-every 2000 \
   --n-layer 2 --n-head 2 --n-embd 64 --block-size 64 --batch-size 32
 ```
 
+## Dashboard
+
+A browser UI for inspecting a run, with three tabs: **Architecture** (static
+model config, parameter counts, and the full parameter table), **Training**
+(loss, weight/gradient distributions, embedding PCA, and attention samples,
+all updating live as `train.py` progresses), and **Inference** (type a
+prompt, generate from any checkpoint, and see the attention weights behind
+that generation).
+
+The dashboard backend serves the frontend too, so one command runs both:
+
+```bash
+uvicorn dashboard.backend.app:app --reload
+```
+
+Then open `http://127.0.0.1:8000/` in a browser.
+
+- Run it from the repo root, so the default `runs_dir="runs"` resolves correctly.
+- `--reload` restarts the server on backend code changes; not needed for
+  frontend-only edits, since `index.html` is served fresh from disk each
+  request.
+- Add `--port` if 8000 is already taken.
+- Add `--host 0.0.0.0` to make it reachable from another machine on the
+  network — uvicorn defaults to `127.0.0.1`, which only accepts connections
+  from the same machine. There's no authentication on any endpoint, so only
+  do this on a trusted network (see DESIGN.md's open questions).
+- The dashboard can be started before or after `train.py` — it just reads
+  whatever's in `runs/` and tails the file. Pick the run from the "Run"
+  dropdown and open the **Training** tab to watch loss, weight/gradient
+  distributions, embedding PCA, and attention samples update live as
+  training progresses.
+
+![Dashboard Training tab](docs/images/dashboard-training-tab.png)
+
+Once a run has at least one checkpoint, open the **Inference** tab to try
+prompts against it — the response streams in, and the attention weights
+behind that specific generation are plotted alongside it (see
+[Findings](#findings) for how to read those).
+
+![Dashboard Inference tab](docs/images/dashboard-inference-tab.png)
+
+## Findings
+
+[`docs/findings.md`](docs/findings.md) documents observations from an actual
+training run — parameter distribution, loss/weight/gradient dynamics,
+embedding PCA across checkpoints, and attention patterns from both training
+and generation.
+
+`docs/embedding_pca_compare.html` is a self-contained interactive chart
+referenced from those findings; GitHub only shows HTML files as source, so
+view it rendered via
+[htmlpreview.github.io](https://htmlpreview.github.io/?https://raw.githubusercontent.com/codeinthecreek/toy-llm/main/docs/embedding_pca_compare.html)
+instead.
+
 ## Intuitive views of how the LLM works
 
 The model trains on a tiny-shakespeare corpus with character-level
@@ -154,7 +208,7 @@ answer. The most likely (or sampled) character is chosen, appended onto
 the context, and the loop runs again with one more character in view —
 this is why generation is inherently sequential, one pass at a time.
 
-## How training works
+## Detailed pipeline of a single training step
 
 The illustrations above are the intuitive picture; this is the literal one
 — the same single training step, but with every stage and tensor shape as
@@ -171,60 +225,6 @@ each handoff — notably, the residual stream stays a constant (B, 64, 64)
 through every block; only the LM head expands it to (B, 64, 65) to score
 against the vocabulary, and only the backward/AdamW steps operate in
 per-parameter shape space rather than per-token shape space.
-
-## Dashboard
-
-A browser UI for inspecting a run, with three tabs: **Architecture** (static
-model config, parameter counts, and the full parameter table — see "How
-training works" above), **Training** (loss, weight/gradient distributions,
-embedding PCA, and attention samples, all updating live as `train.py`
-progresses), and **Inference** (type a prompt, generate from any checkpoint,
-and see the attention weights behind that generation).
-
-The dashboard backend serves the frontend too, so one command runs both:
-
-```bash
-uvicorn dashboard.backend.app:app --reload
-```
-
-Then open `http://127.0.0.1:8000/` in a browser.
-
-- Run it from the repo root, so the default `runs_dir="runs"` resolves correctly.
-- `--reload` restarts the server on backend code changes; not needed for
-  frontend-only edits, since `index.html` is served fresh from disk each
-  request.
-- Add `--port` if 8000 is already taken.
-- Add `--host 0.0.0.0` to make it reachable from another machine on the
-  network — uvicorn defaults to `127.0.0.1`, which only accepts connections
-  from the same machine. There's no authentication on any endpoint, so only
-  do this on a trusted network (see DESIGN.md's open questions).
-- The dashboard can be started before or after `train.py` — it just reads
-  whatever's in `runs/` and tails the file. Pick the run from the "Run"
-  dropdown and open the **Training** tab to watch loss, weight/gradient
-  distributions, embedding PCA, and attention samples update live as
-  training progresses.
-
-![Dashboard Training tab](docs/images/dashboard-training-tab.png)
-
-Once a run has at least one checkpoint, open the **Inference** tab to try
-prompts against it — the response streams in, and the attention weights
-behind that specific generation are plotted alongside it (see
-[Findings](#findings) for how to read those).
-
-![Dashboard Inference tab](docs/images/dashboard-inference-tab.png)
-
-## Findings
-
-[`docs/findings.md`](docs/findings.md) documents observations from an actual
-training run — parameter distribution, loss/weight/gradient dynamics,
-embedding PCA across checkpoints, and attention patterns from both training
-and generation.
-
-`docs/embedding_pca_compare.html` is a self-contained interactive chart
-referenced from those findings; GitHub only shows HTML files as source, so
-view it rendered via
-[htmlpreview.github.io](https://htmlpreview.github.io/?https://raw.githubusercontent.com/codeinthecreek/toy-llm/main/docs/embedding_pca_compare.html)
-instead.
 
 ## Notes
 - `pyenv local toy-llm` writes `.python-version` — as long as you `cd` into the repo with pyenv's shell hook active, the venv activates automatically. No manual `source .venv/bin/activate` needed.
