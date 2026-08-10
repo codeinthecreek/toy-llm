@@ -1,6 +1,7 @@
 # toy-llm
 
 A small hand-written transformer for visualizing architecture, training, and inference.
+See [DESIGN.md](DESIGN.md) for the reasoning behind the choices below.
 
 ## Setup
 
@@ -47,7 +48,7 @@ flags:
 
 ### Choosing parameters
 
-This project's priority is legibility over capability (see DESIGN.md), so
+This project's priority is legibility over capability (see [DESIGN.md](DESIGN.md)), so
 pick these with "what will this look like in the dashboard" in mind rather
 than optimizing for loss:
 
@@ -94,7 +95,7 @@ python train.py --max-steps 10000 --log-every 250 --checkpoint-every 2000 \
 ## Intuitive views of how the LLM works
 
 The model trains on a tiny-shakespeare corpus with character-level
-tokenization (see DESIGN.md for why) — so "characters" below means literal
+tokenization (see [DESIGN.md](DESIGN.md) for why) — so "characters" below means literal
 letters/punctuation, and "ROMEO:" is an actual prompt this project's model
 was given. The three illustrations below simplify the core ideas, but the
 specific behaviors they call out (the layer 0/layer 1 attention split, the
