@@ -93,8 +93,14 @@ python train.py --max-steps 10000 --log-every 250 --checkpoint-every 2000 \
 
 ## Intuitive views of how the LLM works
 
-Three illustrations of the core ideas behind this project, each tied to
-what the toy model actually does.
+The model trains on a tiny-shakespeare corpus with character-level
+tokenization (see DESIGN.md for why) — so "characters" below means literal
+letters/punctuation, and "ROMEO:" is an actual prompt this project's model
+was given. The three illustrations below simplify the core ideas, but the
+specific behaviors they call out (the layer 0/layer 1 attention split, the
+loss curve's shape) aren't hypothetical — they're what was actually observed
+on a real run of this model, documented in detail in
+[`docs/findings.md`](docs/findings.md).
 
 ### How attention lets the model read text
 
@@ -106,7 +112,9 @@ much each token "looks at" every other token when deciding what comes
 next. Layer 0's lines cluster on nearby characters — a recency bias.
 Layer 1's dashed line reaches further back for one specific character —
 sparser, more selective linking, consistent with a deeper layer building
-on the previous layer's output rather than raw token embeddings.
+on the previous layer's output rather than raw token embeddings. This
+split is exactly what the trained model's real attention weights show —
+see "Attention patterns" in `docs/findings.md`.
 
 ### Training as descending a loss landscape
 
@@ -123,13 +131,19 @@ first ~500 steps, then decays slowly out to 8000-10,000 steps.
 
 ![Inference autoregressive loop](docs/images/inference-autoregressive-loop.svg)
 
-The context goes through one forward pass of the model, which outputs a
+This is what happens *after* training, using the model's learned weights
+(a saved checkpoint) rather than the random weights it started with: the
+context goes through one forward pass of the model, which outputs a
 probability for every character in the vocabulary rather than a single
 answer. The most likely (or sampled) character is chosen, appended onto
 the context, and the loop runs again with one more character in view —
 this is why generation is inherently sequential, one pass at a time.
 
 ## How training works
+
+The illustrations above are the intuitive picture; this is the literal one
+— the same single training step, but with every stage and tensor shape as
+actually implemented in `model/`, from the raw batch to the AdamW update.
 
 ![Training pipeline with tensor shapes](docs/images/training-pipeline.svg)
 
