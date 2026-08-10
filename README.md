@@ -179,6 +179,8 @@ Then open `http://127.0.0.1:8000/` in a browser.
   distributions, embedding PCA, and attention samples update live as
   training progresses.
 
+![Dashboard Training tab](docs/images/dashboard-training-tab.png)
+
 ## Findings
 
 [`docs/findings.md`](docs/findings.md) documents observations from an actual
