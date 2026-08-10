@@ -27,6 +27,20 @@ See [DESIGN.md](DESIGN.md) for the reasoning behind the choices below.
 ```
    Should print `True`.
 
+## Workflow
+
+This project has two stages, run as separate processes:
+
+1. **Train a model** ([Training](#training)) — `python train.py` writes
+   checkpoints and a streamed log to `runs/<run_id>/`.
+2. **Run the dashboard** ([Dashboard](#dashboard)) — a browser UI to watch
+   that training run live, inspect the trained model's architecture, and try
+   inference against any of its checkpoints.
+
+The dashboard doesn't need training to be finished, or even started, first —
+it just tails whatever's in `runs/`, so it's fine to start it before,
+during, or after a `train.py` run.
+
 ## Training
 
 Training and the dashboard are separate processes — run them side by side to
@@ -160,6 +174,13 @@ per-parameter shape space rather than per-token shape space.
 
 ## Dashboard
 
+A browser UI for inspecting a run, with three tabs: **Architecture** (static
+model config, parameter counts, and the full parameter table — see "How
+training works" above), **Training** (loss, weight/gradient distributions,
+embedding PCA, and attention samples, all updating live as `train.py`
+progresses), and **Inference** (type a prompt, generate from any checkpoint,
+and see the attention weights behind that generation).
+
 The dashboard backend serves the frontend too, so one command runs both:
 
 ```bash
@@ -173,6 +194,10 @@ Then open `http://127.0.0.1:8000/` in a browser.
   frontend-only edits, since `index.html` is served fresh from disk each
   request.
 - Add `--port` if 8000 is already taken.
+- Add `--host 0.0.0.0` to make it reachable from another machine on the
+  network — uvicorn defaults to `127.0.0.1`, which only accepts connections
+  from the same machine. There's no authentication on any endpoint, so only
+  do this on a trusted network (see DESIGN.md's open questions).
 - The dashboard can be started before or after `train.py` — it just reads
   whatever's in `runs/` and tails the file. Pick the run from the "Run"
   dropdown and open the **Training** tab to watch loss, weight/gradient
@@ -180,6 +205,13 @@ Then open `http://127.0.0.1:8000/` in a browser.
   training progresses.
 
 ![Dashboard Training tab](docs/images/dashboard-training-tab.png)
+
+Once a run has at least one checkpoint, open the **Inference** tab to try
+prompts against it — the response streams in, and the attention weights
+behind that specific generation are plotted alongside it (see
+[Findings](#findings) for how to read those).
+
+![Dashboard Inference tab](docs/images/dashboard-inference-tab.png)
 
 ## Findings
 
