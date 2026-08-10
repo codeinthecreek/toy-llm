@@ -91,6 +91,20 @@ python train.py --max-steps 10000 --log-every 250 --checkpoint-every 2000 \
   --n-layer 2 --n-head 2 --n-embd 64 --block-size 64 --batch-size 32
 ```
 
+## How training works
+
+![Training pipeline with tensor shapes](docs/images/training-pipeline.png)
+
+A single training step: a batch of characters is embedded, passed through
+the transformer blocks (attention, then MLP, each wrapped in a residual
+connection), projected to logits over the vocabulary, scored against the
+true next character via cross-entropy loss, and used to update every
+parameter via backward pass and AdamW. The tensor shape is annotated at
+each handoff — notably, the residual stream stays a constant (B, 64, 64)
+through every block; only the LM head expands it to (B, 64, 65) to score
+against the vocabulary, and only the backward/AdamW steps operate in
+per-parameter shape space rather than per-token shape space.
+
 ## Dashboard
 
 The dashboard backend serves the frontend too, so one command runs both:
