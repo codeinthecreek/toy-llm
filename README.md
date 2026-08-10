@@ -93,7 +93,7 @@ python train.py --max-steps 10000 --log-every 250 --checkpoint-every 2000 \
 
 ## How training works
 
-![Training pipeline with tensor shapes](docs/images/training-pipeline.png)
+![Training pipeline with tensor shapes](docs/images/training-pipeline.svg)
 
 A single training step: a batch of characters is embedded, passed through
 the transformer blocks (attention, then MLP, each wrapped in a residual

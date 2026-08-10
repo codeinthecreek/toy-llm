@@ -1,0 +1,132 @@
+<svg width="680" height="1210" viewBox="0 0 680 1210" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+<title id="title">Training pipeline with tensor shapes</title>
+<desc id="desc">A complete reference diagram combining the forward pass, attention internals, MLP internals, loss computation, backward pass, and AdamW update, with the tensor shape flowing between every major stage.</desc>
+
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+
+<rect width="680" height="1210" fill="#FFFFFF"/>
+
+<!-- shared text styles as attributes: title = bold 14px #1F2937, subtitle/label = 12px #4B5563 -->
+
+<!-- Read batch -->
+<rect x="190" y="20" width="300" height="56" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="340" y="42" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="600" fill="#1F2937">Read batch</text>
+<text x="340" y="60" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">token ids</text>
+<text x="340" y="98" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">(B, T=64) integers</text>
+<line x1="340" y1="76" x2="340" y2="112" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<!-- Embed -->
+<rect x="190" y="114" width="300" height="56" rx="8" fill="#E6F7F3" stroke="#0F9D80" stroke-width="1"/>
+<text x="340" y="136" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="600" fill="#0B6B57">Embed tokens + positions</text>
+<text x="340" y="154" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#0B6B57">two lookups, added</text>
+<text x="340" y="192" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">(B, 64, 64) = (B, T, C)</text>
+<line x1="340" y1="170" x2="340" y2="206" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<!-- Attention container -->
+<rect x="40" y="208" width="600" height="116" rx="16" fill="#E6F7F3" stroke="#0F9D80" stroke-width="1"/>
+<text x="60" y="232" font-family="sans-serif" font-size="14" font-weight="600" fill="#0B6B57">Attention</text>
+
+<rect x="65" y="246" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="151" y="270" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">Q, K, V</text>
+<line x1="237" y1="266" x2="251" y2="266" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+<rect x="253" y="246" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="339" y="270" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">score, scale, mask</text>
+<line x1="425" y1="266" x2="439" y2="266" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+<rect x="441" y="246" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="527" y="270" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">softmax &#8594; output</text>
+
+<text x="340" y="310" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#0B6B57">split into 2 heads of 32 dims; in &amp; out both (B, 64, 64)</text>
+<line x1="340" y1="324" x2="340" y2="346" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<!-- residual 1 -->
+<rect x="270" y="348" width="140" height="36" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="340" y="370" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">+ residual</text>
+<line x1="340" y1="384" x2="340" y2="406" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<!-- MLP container -->
+<rect x="40" y="408" width="600" height="116" rx="16" fill="#E6F7F3" stroke="#0F9D80" stroke-width="1"/>
+<text x="60" y="432" font-family="sans-serif" font-size="14" font-weight="600" fill="#0B6B57">MLP</text>
+
+<rect x="65" y="446" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="151" y="470" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">fc_in (64&#8594;256)</text>
+<line x1="237" y1="466" x2="251" y2="466" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+<rect x="253" y="446" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="339" y="470" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">GELU</text>
+<line x1="425" y1="466" x2="439" y2="466" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+<rect x="441" y="446" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="527" y="470" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">fc_out (256&#8594;64)</text>
+
+<text x="340" y="510" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#0B6B57">widens to (B, 64, 256) inside, back to (B, 64, 64) out</text>
+<line x1="340" y1="524" x2="340" y2="546" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<!-- residual 2 -->
+<rect x="270" y="548" width="140" height="36" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="340" y="570" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">+ residual</text>
+<line x1="340" y1="584" x2="340" y2="606" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<!-- Final LN + LM head -->
+<rect x="190" y="608" width="300" height="56" rx="8" fill="#F1EBFC" stroke="#8B5CF6" stroke-width="1"/>
+<text x="340" y="630" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="600" fill="#5B21B6">Final LayerNorm + LM head</text>
+<text x="340" y="648" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#5B21B6">produces logits</text>
+<text x="340" y="686" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">(B, 64, 65) = (B, T, V) logits</text>
+<line x1="340" y1="664" x2="340" y2="700" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<!-- Loss container -->
+<rect x="40" y="702" width="600" height="116" rx="16" fill="#FDECE8" stroke="#F0805A" stroke-width="1"/>
+<text x="60" y="726" font-family="sans-serif" font-size="14" font-weight="600" fill="#B94A24">Cross-entropy loss</text>
+
+<rect x="65" y="740" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="151" y="764" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">logits &#8594; softmax</text>
+<line x1="237" y1="760" x2="251" y2="760" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+<rect x="253" y="740" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="339" y="764" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">lookup p(true)</text>
+<line x1="425" y1="760" x2="439" y2="760" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+<rect x="441" y="740" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="527" y="764" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">loss = -log(p)</text>
+
+<text x="340" y="804" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#B94A24">(B, 64, 65) collapses to one scalar, averaged</text>
+<text x="340" y="840" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">scalar</text>
+<line x1="340" y1="818" x2="340" y2="854" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<!-- Backward -->
+<rect x="190" y="856" width="300" height="56" rx="8" fill="#FDECE8" stroke="#F0805A" stroke-width="1"/>
+<text x="340" y="878" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="600" fill="#B94A24">Backward pass</text>
+<text x="340" y="896" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#B94A24">autograd computes gradients</text>
+<text x="340" y="934" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">gradients: one per parameter, matching its shape</text>
+<line x1="340" y1="912" x2="340" y2="948" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<!-- AdamW container -->
+<rect x="40" y="950" width="600" height="116" rx="16" fill="#FDECE8" stroke="#F0805A" stroke-width="1"/>
+<text x="60" y="974" font-family="sans-serif" font-size="14" font-weight="600" fill="#B94A24">AdamW update</text>
+
+<rect x="65" y="988" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="151" y="1012" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">m, v running avgs</text>
+<line x1="237" y1="1008" x2="251" y2="1008" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+<rect x="253" y="988" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="339" y="1012" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">step = m/(&#8730;v+&#949;)</text>
+<line x1="425" y1="1008" x2="439" y2="1008" stroke="#6B7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+<rect x="441" y="988" width="172" height="40" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="527" y="1012" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">- decay, update w</text>
+
+<text x="340" y="1052" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#B94A24">every one of the model's 108,352 params updated in place</text>
+<line x1="340" y1="1066" x2="340" y2="1088" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<!-- Log snapshot -->
+<rect x="190" y="1090" width="300" height="56" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+<text x="340" y="1112" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="600" fill="#1F2937">Log snapshot</text>
+<text x="340" y="1130" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">cadence: every step, N, or M</text>
+
+<text x="340" y="1178" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">&#8635; repeats until the configured step count is reached</text>
+</svg>
