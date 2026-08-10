@@ -1,0 +1,40 @@
+<svg width="680" height="340" viewBox="0 0 680 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+<title id="title">How attention lets the model read text</title>
+<desc id="desc">Two transformer layers stacked above a row of character tokens, with attention lines fanning from a query token back to earlier tokens, showing how the model decides what to focus on.</desc>
+
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+
+<rect width="680" height="340" fill="#FFFFFF"/>
+
+<rect x="60" y="40" width="560" height="30" rx="6" fill="#F1EBFC" stroke="#8B5CF6" stroke-width="0.75"/>
+<text x="72" y="60" font-family="sans-serif" font-size="13" fill="#5B21B6">Layer 1 &#8212; specific, sparse links</text>
+
+<rect x="60" y="86" width="560" height="30" rx="6" fill="#F1EBFC" stroke="#8B5CF6" stroke-width="0.75"/>
+<text x="72" y="106" font-family="sans-serif" font-size="13" fill="#5B21B6">Layer 0 &#8212; local, recency-focused</text>
+
+<line x1="340" y1="248" x2="118" y2="146" stroke="#EF9F27" stroke-linecap="round" stroke-width="1" opacity="0.2"/>
+<line x1="340" y1="248" x2="230" y2="146" stroke="#EF9F27" stroke-linecap="round" stroke-width="2.5" opacity="0.55"/>
+<line x1="340" y1="248" x2="284" y2="146" stroke="#EF9F27" stroke-linecap="round" stroke-width="4" opacity="0.9"/>
+<line x1="340" y1="248" x2="118" y2="146" stroke="#0F9D80" stroke-linecap="round" stroke-width="2" opacity="0.65" stroke-dasharray="2 4"/>
+
+<rect x="90" y="248" width="56" height="36" rx="6" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="0.75"/>
+<rect x="202" y="248" width="56" height="36" rx="6" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="0.75"/>
+<rect x="256" y="248" width="56" height="36" rx="6" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="0.75"/>
+<rect x="312" y="248" width="56" height="36" rx="6" fill="#FEF3E2" stroke="#EF9F27" stroke-width="1.25"/>
+<rect x="424" y="248" width="56" height="36" rx="6" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="0.75"/>
+<rect x="534" y="248" width="56" height="36" rx="6" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="0.75"/>
+
+<text x="118" y="270" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="13" fill="#4B5563">R</text>
+<text x="230" y="270" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="13" fill="#4B5563">O</text>
+<text x="284" y="270" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="13" fill="#4B5563">M</text>
+<text x="340" y="270" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="14" font-weight="600" fill="#92400E">E</text>
+<text x="452" y="270" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="13" fill="#4B5563">O</text>
+<text x="562" y="270" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="13" fill="#4B5563">:</text>
+
+<text x="340" y="308" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">Amber: layer 0 favors nearby characters</text>
+<text x="340" y="326" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">Teal dashed: layer 1 links a specific character far back</text>
+</svg>

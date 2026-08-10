@@ -1,0 +1,39 @@
+<svg width="680" height="340" viewBox="0 0 680 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+<title id="title">How the model generates text one character at a time</title>
+<desc id="desc">A loop diagram showing the context feeding into the model, which produces a probability distribution over possible next characters. The most likely one is chosen and appended back to the context, and the loop repeats.</desc>
+
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+
+<rect width="680" height="340" fill="#FFFFFF"/>
+
+<rect x="40" y="150" width="150" height="56" rx="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="0.75"/>
+<text x="115" y="172" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="600" fill="#1F2937">Context so far</text>
+<text x="115" y="190" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">"ROMEO:"</text>
+
+<line x1="190" y1="178" x2="246" y2="178" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<rect x="250" y="150" width="150" height="56" rx="8" fill="#F1EBFC" stroke="#8B5CF6" stroke-width="0.75"/>
+<text x="325" y="172" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="600" fill="#5B21B6">Model</text>
+<text x="325" y="190" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#5B21B6">one forward pass</text>
+
+<line x1="400" y1="178" x2="446" y2="178" stroke="#6B7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<text x="565" y="60" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">Probability of next character</text>
+<rect x="460" y="120" width="26" height="86" rx="3" fill="#FEF3E2" stroke="#EF9F27" stroke-width="1.25"/>
+<rect x="500" y="150" width="26" height="56" rx="3" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="0.75"/>
+<rect x="540" y="170" width="26" height="36" rx="3" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="0.75"/>
+<rect x="580" y="182" width="26" height="24" rx="3" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="0.75"/>
+<rect x="620" y="190" width="26" height="16" rx="3" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="0.75"/>
+<text x="473" y="222" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="600" fill="#92400E">\n</text>
+<text x="513" y="222" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">N</text>
+<text x="553" y="222" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">o</text>
+<text x="593" y="222" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">a</text>
+<text x="633" y="222" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">e</text>
+
+<path d="M473 118 C 473 100, 490 96, 500 96 C 470 96, 190 96, 130 96 C 100 96, 90 110, 90 148" fill="none" stroke="#EF9F27" stroke-width="1" opacity="0.7" stroke-dasharray="3 4" marker-end="url(#arrow)"/>
+<text x="300" y="90" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4B5563">chosen character is appended, then repeat</text>
+</svg>

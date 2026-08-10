@@ -91,6 +91,44 @@ python train.py --max-steps 10000 --log-every 250 --checkpoint-every 2000 \
   --n-layer 2 --n-head 2 --n-embd 64 --block-size 64 --batch-size 32
 ```
 
+## Intuitive views of how the LLM works
+
+Three illustrations of the core ideas behind this project, each tied to
+what the toy model actually does.
+
+### How attention lets the model read text
+
+![How attention reads text](docs/images/how-attention-reads-text.svg)
+
+The bottom row is a sequence of characters ("ROMEO:"). Each layer above is
+a full pass over the whole sequence, and the lines show attention: how
+much each token "looks at" every other token when deciding what comes
+next. Layer 0's lines cluster on nearby characters — a recency bias.
+Layer 1's dashed line reaches further back for one specific character —
+sparser, more selective linking, consistent with a deeper layer building
+on the previous layer's output rather than raw token embeddings.
+
+### Training as descending a loss landscape
+
+![Training as descending a landscape](docs/images/training-as-descending-a-landscape.svg)
+
+The vertical axis is loss (how wrong the model's predictions are); the
+ball is the model's current state, always rolling toward lower loss.
+Early on the surface is steep, so a single training step buys a big drop.
+Later, the surface flattens, so each step only nudges the ball a little —
+matching this project's actual loss curve, which falls sharply in the
+first ~500 steps, then decays slowly out to 8000-10,000 steps.
+
+### Inference: generating one character at a time
+
+![Inference autoregressive loop](docs/images/inference-autoregressive-loop.svg)
+
+The context goes through one forward pass of the model, which outputs a
+probability for every character in the vocabulary rather than a single
+answer. The most likely (or sampled) character is chosen, appended onto
+the context, and the loop runs again with one more character in view —
+this is why generation is inherently sequential, one pass at a time.
+
 ## How training works
 
 ![Training pipeline with tensor shapes](docs/images/training-pipeline.svg)
