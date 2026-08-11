@@ -314,6 +314,33 @@ the diagram's containers almost exactly; everything outside it is flat
 orchestration code that treats the model as one differentiable function
 plus a `.parameters()` list.
 
+### torch library surface
+
+The mapping above names individual `torch.nn` classes as they come up.
+Zooming out, the whole codebase (`model/`, `train.py`, `scripts/`, tests)
+draws from four parts of the library:
+
+- **`torch.nn`** — the model's building blocks: `nn.Module` (base class for
+  every component), `nn.Linear`, `nn.Embedding`, `nn.LayerNorm`, `nn.GELU`,
+  `nn.Dropout`, `nn.ModuleList` (the stack of `Block`s), and `nn.init` for
+  weight initialization. `nn.MultiheadAttention` and `nn.TransformerEncoder`
+  appear only in docstrings, naming what's deliberately *not* used.
+- **`torch.nn.functional`** (`F`) — the two stateless ops with no learned
+  parameters of their own: `F.softmax` (attention weights) and
+  `F.cross_entropy` (loss).
+- **`torch.optim`** — just `AdamW`, the training optimizer.
+- **Core `torch`** — tensor construction and manipulation with no `nn` or
+  `optim` involved: shape/construction (`arange`, `zeros`, `ones`, `randn`,
+  `randint`, `tensor`, `stack`, `cat`, `tril`, `triu`), training-loop
+  mechanics (`manual_seed`, `no_grad`, `topk`, `multinomial`, `softmax`),
+  I/O and device (`load`, `save`, `device`, `cuda.is_available`), and
+  stats/analysis used in logging and tests (`quantile`, `pca_lowrank`,
+  `allclose`, `equal`, `all`).
+
+Notably absent: `torch.autograd` is never called directly anywhere in the
+codebase — `.backward()` is a `Tensor` method, so autograd runs implicitly
+rather than through an explicit `torch.autograd.*` call.
+
 ## Notes
 - `pyenv local toy-llm` writes `.python-version` — as long as you `cd` into the repo with pyenv's shell hook active, the venv activates automatically. No manual `source .venv/bin/activate` needed.
 - To list existing pyenv virtualenvs: `pyenv virtualenvs`
