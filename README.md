@@ -226,6 +226,69 @@ through every block; only the LM head expands it to (B, 64, 65) to score
 against the vocabulary, and only the backward/AdamW steps operate in
 per-parameter shape space rather than per-token shape space.
 
+### From diagram to code
+
+The diagram's boxes split into two ownership zones. The teal band (Embed
+through the second residual) is internal to a single `model(x)` call —
+`train.py` never sees inside it. Everything in gray or orange is
+orchestration code in `train.py` that treats the model as one opaque,
+differentiable function.
+
+**Inside the model — one `model(x)` call, three levels of `nn.Module`:**
+
+- **Embed tokens + positions**: `GPT`'s own `token_emb`/`pos_emb` lookups,
+  added directly in `GPT.forward` (`model/gpt.py`).
+- **Attention**: one `Block`'s call into `self.attn`, a
+  `CausalSelfAttention` instance (`model/attention.py`). The three
+  sub-boxes (Q/K/V, score/scale/mask, softmax → output) are internal steps
+  of `CausalSelfAttention.forward` — still a single module call from
+  `Block`'s point of view.
+- **+ residual (first)**: not part of `CausalSelfAttention` — `Block.forward`
+  (`model/block.py`) adds the attention output back onto its
+  un-normalized input itself.
+- **MLP**: `Block`'s call into `self.mlp`, an `MLP` instance. Its three
+  sub-boxes (`fc_in`, GELU, `fc_out`) are `MLP.forward`'s internal steps.
+- **+ residual (second)**: `Block.forward` again, same pattern as the first
+  residual.
+- **Final LayerNorm + LM head**: back to `GPT` itself — `ln_f` and
+  `lm_head`, run once after the block loop, owned by neither `Block`.
+
+The diagram draws one Attention → residual → MLP → residual unit, but
+that's a single `Block`; `GPT.forward` loops it `n_layer` times via
+`self.blocks` (an `nn.ModuleList`). The diagram shows one iteration of a
+loop that's invisible at this zoom level.
+
+**Outside the model — plain orchestration in `train.py`'s training loop:**
+
+- **Read batch**: `get_batch` — plain tensor indexing, no `nn.Module`
+  involved; this is where the loop hands data to the model.
+- **Cross-entropy loss**: a single `F.cross_entropy` call — a
+  differentiable function with no learned parameters of its own, and the
+  first point after `model(x)` where control returns to `train.py`'s flat
+  script rather than a class hierarchy.
+- **Backward pass**: `loss.backward()`, one line — the diagram's biggest
+  compression. It stands for autograd walking back through every op in
+  every box above it (Q/K/V projections, softmax, GELU, both LayerNorms,
+  the embedding lookups) in reverse. None of that traversal logic lives in
+  `model/` or `train.py`; PyTorch's autograd engine executes it against the
+  graph that was built implicitly while `GPT.forward` ran.
+- **AdamW update**: `optimizer.step()`, one line. `model/` contributes
+  nothing here directly — the optimizer only needed `model.parameters()`,
+  grabbed once at construction, and their `.grad` fields populated by the
+  previous box.
+- **Log snapshot**: `SnapshotLogger` plus the `*_event` helper functions.
+  This is the one place `train.py` reaches back *into* the model from
+  outside — `attention_sample_event` calls
+  `model(..., return_intermediates=True)` to pull out the `attn_weights`
+  that `CausalSelfAttention.forward` computed internally, via an optional
+  return path threaded through `GPT` → `Block` → `CausalSelfAttention`
+  specifically to punch a hole in that encapsulation for this one caller.
+
+In short: the teal zone is three levels of `nn.Module` nesting that mirror
+the diagram's containers almost exactly; everything outside it is flat
+orchestration code that treats the model as one differentiable function
+plus a `.parameters()` list.
+
 ## Notes
 - `pyenv local toy-llm` writes `.python-version` — as long as you `cd` into the repo with pyenv's shell hook active, the venv activates automatically. No manual `source .venv/bin/activate` needed.
 - To list existing pyenv virtualenvs: `pyenv virtualenvs`
