@@ -236,46 +236,71 @@ differentiable function.
 
 **Inside the model — one `model(x)` call, three levels of `nn.Module`:**
 
-- **Embed tokens + positions**: `GPT`'s own `token_emb`/`pos_emb` lookups,
-  added directly in `GPT.forward` (`model/gpt.py`).
+- **Embed tokens + positions**: two `nn.Embedding` tables owned directly by
+  `GPT` — `token_emb` (`vocab_size × n_embd`) and `pos_emb`
+  (`block_size × n_embd`) — looked up and summed in `GPT.forward`
+  (`model/gpt.py`). `GPT`'s class docstring is explicit that this whole
+  model is "wired up explicitly rather than via `nn.TransformerEncoder`, so
+  the forward pass stays inspectable end to end" — these two embedding
+  tables are the first instance of that: nothing fuses them, `GPT` just
+  owns and adds them.
 - **Attention**: one `Block`'s call into `self.attn`, a
-  `CausalSelfAttention` instance (`model/attention.py`). The three
-  sub-boxes (Q/K/V, score/scale/mask, softmax → output) are internal steps
-  of `CausalSelfAttention.forward` — still a single module call from
-  `Block`'s point of view.
-- **+ residual (first)**: not part of `CausalSelfAttention` — `Block.forward`
+  `CausalSelfAttention` instance (`model/attention.py`) built from four
+  plain `nn.Linear` layers (`q_proj`, `k_proj`, `v_proj`, `out_proj`) and
+  two `nn.Dropout` layers. Its own docstring names the design choice
+  directly: "written out rather than delegated to `nn.MultiheadAttention`,
+  so the forward pass can be inspected head-by-head." The diagram's three
+  sub-boxes are that written-out sequence — the `nn.Linear` projections
+  reshaped into heads; a manual scaled dot-product (`q @ k.transpose(...)`)
+  masked using a causal `torch.tril` buffer registered in `__init__`; then
+  `F.softmax` and a weighted sum back through `out_proj`.
+- **+ residual (first)**: not a `torch.nn` component at all — `Block.forward`
   (`model/block.py`) adds the attention output back onto its
-  un-normalized input itself.
-- **MLP**: `Block`'s call into `self.mlp`, an `MLP` instance. Its three
-  sub-boxes (`fc_in`, GELU, `fc_out`) are `MLP.forward`'s internal steps.
-- **+ residual (second)**: `Block.forward` again, same pattern as the first
-  residual.
-- **Final LayerNorm + LM head**: back to `GPT` itself — `ln_f` and
-  `lm_head`, run once after the block loop, owned by neither `Block`.
+  un-normalized input with a plain `+`.
+- **MLP**: `Block`'s call into `self.mlp`, an `MLP` instance built from
+  `nn.Linear` (`fc_in`, expands to `4 × n_embd`) → `nn.GELU` →
+  `nn.Linear` (`fc_out`, contracts back) → `nn.Dropout`. Its docstring —
+  "Two-layer feed-forward network with GELU, written out explicitly" —
+  is the same convention as attention, just with fewer steps to hide since
+  no fused "MLP module" exists in `torch.nn` to avoid in the first place.
+- **+ residual (second)**: `Block.forward` again, same `+` pattern as the
+  first residual. `Block`'s own docstring summarizes both residual hops in
+  one line: "Pre-norm transformer block: LN -> attention -> residual, LN ->
+  MLP -> residual."
+- **Final LayerNorm + LM head**: back to `GPT` itself — an `nn.LayerNorm`
+  (`ln_f`) and a bias-free `nn.Linear` (`lm_head`), run once after the
+  block loop, owned by neither `Block`. `lm_head.weight` is tied to
+  `token_emb.weight` rather than being an independently learned matrix.
 
 The diagram draws one Attention → residual → MLP → residual unit, but
 that's a single `Block`; `GPT.forward` loops it `n_layer` times via
-`self.blocks` (an `nn.ModuleList`). The diagram shows one iteration of a
-loop that's invisible at this zoom level.
+`self.blocks`, an `nn.ModuleList` of `Block` instances — the `nn.Module`
+container that stands in for the `nn.TransformerEncoder` the docstring
+says this project deliberately avoids. The diagram shows one iteration of
+that loop, invisible at this zoom level.
 
 **Outside the model — plain orchestration in `train.py`'s training loop:**
 
-- **Read batch**: `get_batch` — plain tensor indexing, no `nn.Module`
-  involved; this is where the loop hands data to the model.
+- **Read batch**: `get_batch` — plain tensor indexing (`torch.randint`,
+  `torch.stack`), no `nn.Module` or `torch.nn` component involved; this is
+  where the loop hands data to the model.
 - **Cross-entropy loss**: a single `F.cross_entropy` call — a
-  differentiable function with no learned parameters of its own, and the
-  first point after `model(x)` where control returns to `train.py`'s flat
-  script rather than a class hierarchy.
+  `torch.nn.functional` function, not a class with its own learned
+  parameters, and the first point after `model(x)` where control returns
+  to `train.py`'s flat script rather than a class hierarchy.
 - **Backward pass**: `loss.backward()`, one line — the diagram's biggest
-  compression. It stands for autograd walking back through every op in
-  every box above it (Q/K/V projections, softmax, GELU, both LayerNorms,
-  the embedding lookups) in reverse. None of that traversal logic lives in
-  `model/` or `train.py`; PyTorch's autograd engine executes it against the
-  graph that was built implicitly while `GPT.forward` ran.
-- **AdamW update**: `optimizer.step()`, one line. `model/` contributes
-  nothing here directly — the optimizer only needed `model.parameters()`,
-  grabbed once at construction, and their `.grad` fields populated by the
-  previous box.
+  compression. It stands for `torch.autograd` walking back through every op
+  in every box above it (the `nn.Linear` projections, `F.softmax`,
+  `nn.GELU`, both `nn.LayerNorm`s, the `nn.Embedding` lookups) in reverse.
+  None of that traversal logic lives in `model/` or `train.py` — it's
+  PyTorch's autograd engine executing against the graph that was built
+  implicitly, op by op, while `GPT.forward` ran.
+- **AdamW update**: `optimizer.step()`, one line, where `optimizer` is a
+  `torch.optim.AdamW` instance constructed once against
+  `model.parameters()`. `model/` contributes nothing here directly beyond
+  that parameter list — `AdamW` reads each tensor's `.grad`, updates its
+  own internal per-parameter moment estimates, and writes the result back
+  into `.data` in place.
 - **Log snapshot**: `SnapshotLogger` plus the `*_event` helper functions.
   This is the one place `train.py` reaches back *into* the model from
   outside — `attention_sample_event` calls
