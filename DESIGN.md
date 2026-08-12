@@ -110,26 +110,6 @@ rounding error against 4GB VRAM. Device is a config flag (`cuda` if
 available, else `cpu`) rather than hardcoded, mainly so CPU-vs-GPU training
 time can be compared directly as a side experiment.
 
-## Development environment: native, not Docker
-
-Claude Code runs natively on the host for this project, not inside the
-Docker sandbox used for systems-level work. The two are different risk
-profiles: systems work has a wide blast radius (OS config, package
-management, mounted drives) and benefits from containment; project dev work
-is scoped to a version-controlled directory tree, where the worst case is
-recoverable via git. Containerizing this project would also reintroduce GPU
-passthrough friction (`nvidia-container-toolkit`, driver/CUDA version
-matching inside the container) for no real safety benefit at this risk
-level.
-
-**Guardrails instead of containment**: `.claude/settings.local.json` denies
-destructive commands outright (`sudo`, `dd`, `mkfs`, `rm -rf /*`, force-push,
-curl-pipe-bash) and requires confirmation for risky-but-sometimes-legitimate
-ones (`rm -rf` scoped, `git reset --hard`, `git clean`). This is a policy
-enforced by Claude Code itself, not OS-level sandboxing — git discipline
-(commit before letting Claude Code make non-trivial changes) is the actual
-fallback if something gets through.
-
 ## Dashboard architecture
 
 **FastAPI backend, polling-based file tail.** The backend reads
