@@ -175,13 +175,6 @@ the dashboard is a single HTML file that pulls in Plotly from a CDN
 `<script>` tag, plus vanilla JS to receive data (via SSE or polling) and
 call `Plotly.newPlot()` / `Plotly.extendTraces()`.
 
-## Commit conventions
-
-Commits with substantial Claude Code-authored content carry a
-`Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` trailer, adopted
-from the training-loop commit onward. Not applied retroactively to earlier
-commits — not worth rewriting history for a cosmetic trailer.
-
 ## Open questions / not yet decided
 
 - Exact PCA vs. t-SNE tradeoff for the embedding-projection view (PCA is
