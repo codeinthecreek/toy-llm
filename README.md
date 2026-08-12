@@ -338,8 +338,9 @@ draws from four parts of the library:
   `allclose`, `equal`, `all`).
 
 Notably absent: `torch.autograd` is never called directly anywhere in the
-codebase — `.backward()` is a `Tensor` method, so autograd runs implicitly
-rather than through an explicit `torch.autograd.*` call.
+codebase — `Tensor.backward()` is a thin wrapper around
+`torch.autograd.backward()`, so autograd runs implicitly rather than
+through an explicit `torch.autograd.*` call.
 
 ## Notes
 - `pyenv local toy-llm` writes `.python-version` — as long as you `cd` into the repo with pyenv's shell hook active, the venv activates automatically. No manual `source .venv/bin/activate` needed.
